@@ -43,7 +43,7 @@
 | Sensor scaling | `DAGSTER_GRPC_MAX_WORKERS` (code server threads); `sensors.use_threads` and `num_workers` (daemon) ([Troubleshooting sensor timeouts](https://dagster.io/docs/deployment/troubleshooting/sensor-timeouts)) |
 | Declarative Automation | `AutomationCondition` on assets/checks: `on_cron` (after upstreams update; latest partition only), `eager` (on upstream update), `on_missing` (missing partitions once upstreams exist) ([Declarative Automation](https://dagster.io/docs/guides/automate/declarative-automation)) |
 | Automation evaluation | `default_automation_condition_sensor` must be enabled in the UI; `evaluate_automation_conditions` tests without the daemon ([Declarative Automation](https://dagster.io/docs/guides/automate/declarative-automation)) |
-| Default sensor interval | 30 s is widely cited — **Not verified** |
+| Default sensor interval | 30 s when `minimum_interval_seconds` is unset (`DEFAULT_SENSOR_DAEMON_INTERVAL = 30` in package source; the API reference lists no default) ([dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/), [Schedules and sensors API reference](https://dagster.io/docs/api/dagster/schedules-sensors)) |
 
 ```mermaid
 sequenceDiagram
@@ -87,5 +87,7 @@ sequenceDiagram
 - [S62] [Troubleshooting sensor timeouts](https://dagster.io/docs/deployment/troubleshooting/sensor-timeouts)
 - [S63] [Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency)
 - [S64] [Backfilling data](https://dagster.io/docs/guides/build/partitions-and-backfills/backfilling-data)
+- [S108] [Schedules and sensors API reference](https://dagster.io/docs/api/dagster/schedules-sensors)
+- [S112] [dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/) — *package source*
 
 Full numbered list: [references/sources.md](../references/sources.md)

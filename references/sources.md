@@ -43,7 +43,7 @@ As of 2026-11-11. Label legend: no label = official page, fetched and used; *not
 
 17. **[S17]** [Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error)
 18. **[S18]** [External Storage](https://docs.temporal.io/external-storage)
-19. **[S19]** [External Storage Public Preview (changelog entry)](https://temporal.io/changelog/external-storage-public-preview) — *not fetched*
+19. **[S19]** [External Storage Public Preview (changelog entry)](https://temporal.io/changelog/external-storage-public-preview)
 20. **[S20]** [Long-Running Activity pattern](https://docs.temporal.io/design-patterns/long-running-activity)
 21. **[S21]** [Batch Processing Patterns](https://docs.temporal.io/design-patterns/batch-processing-patterns)
 22. **[S22]** [Batch Iterator](https://docs.temporal.io/design-patterns/batch-iterator) — *not fetched*
@@ -138,7 +138,7 @@ As of 2026-11-11. Label legend: no label = official page, fetched and used; *not
 81. **[S81]** [Insights (Dagster+)](https://docs.dagster.io/guides/observe/insights) — *not fetched*
 82. **[S82]** [Unit testing assets and ops](https://dagster.io/docs/guides/test/unit-testing-assets-and-ops)
 83. **[S83]** [Testing assets with asset checks](https://dagster.io/docs/guides/test/asset-checks)
-84. **[S84]** [Execution API reference](https://docs.dagster.io/api/dagster/execution) — *not fetched*
+84. **[S84]** [Execution API reference](https://docs.dagster.io/api/dagster/execution) — *fetched 2026-11-11 via redirect to dagster.io/docs/api/dagster/execution*
 85. **[S85]** [Ops API reference](https://docs.dagster.io/api/dagster/ops) — *not fetched*
 86. **[S86]** [Running Dagster locally](https://dagster.io/docs/deployment/oss/deployment-options/running-dagster-locally)
 87. **[S87]** [Dagster CLI API reference](https://docs.dagster.io/api/clis/cli) — *not fetched*
@@ -170,3 +170,20 @@ As of 2026-11-11. Label legend: no label = official page, fetched and used; *not
 101. **[S101]** [Dynamic partitioning](https://dagster.io/blog/dynamic-partitioning) — *vendor blog*
 102. **[S102]** [How does Dagster compare to Flyte and Temporal (community forum)](https://discuss.dagster.io/t/22772686/how-does-dagster-compare-to-flyte-and-temporal) — *third-party, AI-generated answer, not authoritative*
 
+### Verification pass (2026-11-11)
+
+103. **[S103]** [dagster-airbyte library reference](https://dagster.io/docs/integrations/libraries/airbyte/dagster-airbyte)
+104. **[S104]** [Sling (Pythonic)](https://dagster.io/docs/integrations/libraries/sling/sling-pythonic)
+105. **[S105]** [Sling replication modes](https://docs.slingdata.io/concepts/replication/modes) — *Sling's official docs (third-party to Dagster)*
+106. **[S106]** [External Storage - Python SDK](https://docs.temporal.io/develop/python/data-handling/external-storage)
+107. **[S107]** [External Storage - Go SDK](https://docs.temporal.io/develop/go/data-handling/external-storage)
+108. **[S108]** [Schedules and sensors API reference](https://dagster.io/docs/api/dagster/schedules-sensors)
+109. **[S109]** [Partitions API reference](https://dagster.io/docs/api/dagster/partitions)
+110. **[S110]** [Assets API reference](https://dagster.io/docs/api/dagster/assets)
+111. **[S111]** [Run queue limits](https://dagster.io/docs/guides/operate/managing-concurrency/run-queue-limits)
+112. **[S112]** [dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/) — *package source inspected: `_core/definitions/sensor_definition.py`, `_core/instance/config.py`*
+113. **[S113]** [dagster-aws 0.29.29 (PyPI)](https://pypi.org/project/dagster-aws/0.29.29/) — *package source inspected: `dagster_aws/s3/sensor.py`*
+114. **[S114]** [dagster-aws API reference](https://dagster.io/docs/api/libraries/dagster-aws)
+115. **[S115]** [Activity Timeouts - Python SDK](https://docs.temporal.io/develop/python/activities/timeouts)
+116. **[S116]** [temporalio 1.36.0 (PyPI)](https://pypi.org/project/temporalio/1.36.0/) — *package metadata and source inspected*
+117. **[S117]** [Dagster daemon](https://dagster.io/docs/deployment/execution/dagster-daemon)

@@ -6,7 +6,7 @@
 > - Dagster leads on data awareness, connectors and ramp-up; Temporal leads on durability, language reach, rate limiting and OSS security.
 > - "Not verified" cells point to [doc 13](docs/13-unverified-and-open-questions.md).
 
-As of 2026-11-11. Temporal Server v1.32.1; Dagster 1.13.29.
+As of 2026-11-11. Temporal Server v1.32.1; Dagster 1.13.29 (PyPI; GitHub "Latest" showed 1.13.28 and the docs picker 1.12.8 on the same date, see [doc 13](docs/13-unverified-and-open-questions.md) C1).
 
 ## Facts
 
@@ -32,9 +32,9 @@ As of 2026-11-11. Temporal Server v1.32.1; Dagster 1.13.29.
 | D5 Partitions | None (*inference*) | Partitioned assets ([Backfilling data](https://dagster.io/docs/guides/build/partitions-and-backfills/backfilling-data)) |
 | D5 Backfill unit | Schedule action times ([Schedule](https://docs.temporal.io/schedule)) | Partitions; per-partition, multi-run, single-run ([Partition backfill strategies](https://dagster.io/docs/examples/best-practices/partition-backfill-strategies)) |
 | D5 Data quality | None built in | Asset checks, optional `blocking=True` ([Testing assets with asset checks](https://dagster.io/docs/guides/test/asset-checks)) |
-| **D6 Connectors** | None official found; user Activities (*inference*) | dlt, Sling, Airbyte, Fivetran (supported); Meltano (community) ([Dagster integrations index](https://dagster.io/docs/integrations/libraries)) |
+| **D6 Connectors** | None official found; user Activities (*inference*) | dlt, Sling, Airbyte, Fivetran (supported); Meltano (community) ([Dagster integrations index](https://dagster.io/docs/integrations/libraries)); Airbyte assets trigger syncs ([dagster-airbyte library reference](https://dagster.io/docs/integrations/libraries/airbyte/dagster-airbyte)) |
 | D6 Downstream dbt | None | `DbtProjectComponent`, source → asset key links ([dbt integration](https://dagster.io/docs/integrations/libraries/dbt)) |
-| D6 Large payloads | 2 MB default; references or External Storage (Public Preview) ([Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error), [External Storage](https://docs.temporal.io/external-storage)) | Data written by assets; Pipes returns logs/metadata only ([Dagster Pipes (guide)](https://dagster.io/docs/guides/build/external-pipelines)) |
+| D6 Large payloads | 2 MB default; references or External Storage (Public Preview; SDK-side; self-hosted support not explicitly stated) ([Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error), [External Storage](https://docs.temporal.io/external-storage)) | Data written by assets; Pipes returns logs/metadata only ([Dagster Pipes (guide)](https://dagster.io/docs/guides/build/external-pipelines)) |
 | D6 Idempotency | Activities may run multiple times; idempotency key = Run ID + Activity ID ([Activity Definition](https://docs.temporal.io/activity-definition)) | Sensor run keys dedupe runs ([Sensors](https://dagster.io/docs/guides/automate/sensors)) |
 | D6 Rate limiting | Queue-global `max_task_queue_activities_per_second` ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)) | Concurrency pools for shared APIs ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency)) |
 | D6 Batch fan-out | Child Workflows, Batch Iterator, Sliding Window, MapReduce ([Batch Processing Patterns](https://docs.temporal.io/design-patterns/batch-processing-patterns)) | Backfill policies; executors ([Partition backfill strategies](https://dagster.io/docs/examples/best-practices/partition-backfill-strategies), [Run executors](https://dagster.io/docs/guides/operate/run-executors)) |
@@ -48,10 +48,10 @@ As of 2026-11-11. Temporal Server v1.32.1; Dagster 1.13.29.
 | D8 Local dev | `temporal server start-dev`, UI 8233 ([Temporal CLI server command reference](https://docs.temporal.io/cli/server)) | `dg dev` ([Running Dagster locally](https://dagster.io/docs/deployment/oss/deployment-options/running-dagster-locally)) |
 | D8 Languages | 8 SDKs ([Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal)) | Python; Pipes for others ([Dagster Pipes (guide)](https://dagster.io/docs/guides/build/external-pipelines)) |
 | **D9 Install paths** | Dev server, Compose, binaries, embedded Go, Helm ([Deploying a Temporal Service](https://docs.temporal.io/self-hosted-guide/deployment)) | Local, Compose, Helm, ECS, GCP ([Deploying to Kubernetes](https://dagster.io/docs/deployment/oss/deployment-options/kubernetes/deploying-to-kubernetes)) |
-| D9 Fixed-at-creation | History Shards, 1–128K ([Temporal Server](https://docs.temporal.io/temporal-service/temporal-server)) | None found |
+| D9 Fixed-at-creation | History Shards (1–128K used in practice; count cannot change) ([Temporal Server](https://docs.temporal.io/temporal-service/temporal-server)) | None found |
 | D9 Payload limit | 512 KB warn / 2 MB error ([Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)) | Not applicable |
 | D9 History limit | 10,240 / 51,200 events; 10 / 50 MB ([Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)) | Not applicable |
-| D9 Pending ops | 2,000 each (≤500 recommended) ([Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)) | `max_concurrent_runs`, pools ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency)) |
+| D9 Pending ops | 2,000 each (≤500 recommended) ([Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)) | `max_concurrent_runs` (default 10 per package source), pools ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency), [dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/)) |
 | **D10 Default posture** | Allows every request ([Temporal Platform security features](https://docs.temporal.io/self-hosted-guide/security)) | No auth in OSS ([GitHub Discussion #23851 (maintainer answer)](https://github.com/dagster-io/dagster/discussions/23851)) |
 | D10 AuthN / AuthZ | mTLS, JWT ClaimMapper, Authorizer, UI SSO ([Temporal Platform security features](https://docs.temporal.io/self-hosted-guide/security)) | Dagster+ only ([GitHub Discussion #23851 (maintainer answer)](https://github.com/dagster-io/dagster/discussions/23851)) |
 | D10 Payload encryption | Payload Codec ([Temporal Platform security features](https://docs.temporal.io/self-hosted-guide/security)) | No equivalent found (*inference*) |
@@ -129,5 +129,7 @@ As of 2026-11-11. Temporal Server v1.32.1; Dagster 1.13.29.
 - [S95] [PyPI dagster JSON](https://pypi.org/pypi/dagster/json)
 - [S96] [Prefect is acquiring Dagster](https://dagster.io/blog/prefect-is-acquiring-dagster) — *vendor blog*
 - [S100] [Why We Built Dagster](https://dagster.io/blog/dagster-the-data-orchestrator) — *vendor blog*
+- [S103] [dagster-airbyte library reference](https://dagster.io/docs/integrations/libraries/airbyte/dagster-airbyte)
+- [S112] [dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/) — *package source*
 
 Full numbered list: [references/sources.md](references/sources.md)

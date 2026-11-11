@@ -50,8 +50,8 @@ sequenceDiagram
 | NonRetryableErrorTypes | none |
 
 - Workflow Executions have **no default Retry Policy**; Workflow *Task* Executions retry with backoff up to a 10-minute interval until the Workflow Execution Timeout (unlimited by default) ([Retry Policies](https://docs.temporal.io/encyclopedia/retry-policies)).
-- Workflow retries are "generally discouraged"; exceptions include cron-like and file-processing Workflows ([Retry Policies](https://docs.temporal.io/encyclopedia/retry-policies)).
-- Activities should be idempotent because they can re-execute ([Retry Policies](https://docs.temporal.io/encyclopedia/retry-policies), [Activity Definition](https://docs.temporal.io/activity-definition)).
+- Retrying a whole Workflow Execution "is not recommended"; "only certain scenarios" merit a custom Workflow Retry Policy, e.g. Cron-like and file-processing Workflows ([Retry Policies](https://docs.temporal.io/encyclopedia/retry-policies)).
+- Activities should be idempotent because they can re-execute: "Activities that perform writes should be idempotent" ([Activity Definition](https://docs.temporal.io/activity-definition)); the Retry Policies page only points to idempotence guidance ([Retry Policies](https://docs.temporal.io/encyclopedia/retry-policies)).
 
 ### Activity timeouts ([Detecting Activity failures](https://docs.temporal.io/encyclopedia/detecting-activity-failures.md))
 

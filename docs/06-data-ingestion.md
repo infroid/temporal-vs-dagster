@@ -3,7 +3,7 @@
 > **Key takeaways**
 > - **Dagster** ships first-party integrations for **dlt, Sling, Airbyte, Fivetran** (and dbt downstream) that model each table/stream as an asset; Meltano is community-maintained; `dagster-embedded-elt` is deprecated ([Dagster integrations index](https://dagster.io/docs/integrations/libraries), [Embedded ELT (deprecated)](https://dagster.io/docs/integrations/libraries/embedded-elt)).
 > - **Temporal** ships **no data connectors** (none found); it gives durable primitives: retries, heartbeat checkpoints, batch patterns, queue-wide rate limits ([Long-Running Activity pattern](https://docs.temporal.io/design-patterns/long-running-activity), [Batch Processing Patterns](https://docs.temporal.io/design-patterns/batch-processing-patterns), [Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)).
-> - **Large data never goes through Temporal payloads**: 2 MB default limit; pass references or use **External Storage** (Public Preview) ([Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error), [External Storage](https://docs.temporal.io/external-storage)).
+> - **Large data never goes through Temporal payloads**: 2 MB default limit; pass references or use **External Storage** (Public Preview, SDK-side Data Converter feature; self-hosted support not explicitly stated) ([Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error), [External Storage](https://docs.temporal.io/external-storage)).
 > - Both are **at-least-once** at the work-unit level: Temporal Activities "may be executed multiple times" ([Activity Definition](https://docs.temporal.io/activity-definition)); Dagster dedupes *runs* with sensor run keys ([Sensors](https://dagster.io/docs/guides/automate/sensors)). Writes must be idempotent in both.
 > - *Judgement:* Dagster wins on connector-based ELT and partition backfills; Temporal wins on custom, high-fan-out, rate-limited or long-running extraction.
 
@@ -12,8 +12,8 @@
 | Tool | Dagster OSS | Temporal OSS |
 |---|---|---|
 | **dlt** | "Dagster supported", Component (`DltLoadCollectionComponent` in `defs.yaml`); Pythonic: multi-asset, each dlt resource → asset, `DagsterDltResource` ([dlt integration](https://dagster.io/docs/integrations/libraries/dlt), [dlt integration (Pythonic)](https://dagster.io/docs/integrations/libraries/dlt/dlt-pythonic)) | No official integration found; call dlt inside an Activity (*inference*) |
-| **Sling** | "Dagster supported", Component (`SlingReplicationCollectionComponent`, `connections` + `replications`); example uses `mode: full-refresh`; incremental modes not documented on that page ([Sling integration](https://dagster.io/docs/integrations/libraries/sling)) | None found |
-| **Airbyte** | "Dagster supported"; `AirbyteWorkspaceComponent` for Cloud and OSS/Self-Managed; one asset per stream; caches workspace metadata ([Airbyte integration](https://dagster.io/docs/integrations/libraries/airbyte), [Airbyte component](https://dagster.io/docs/integrations/libraries/airbyte/airbyte-component)) | None found. Airbyte has a case study on temporal.io (*vendor case study, not fetched*) ([Airbyte case study](https://web.temporal.io/case-studies/airbyte-case-study)) |
+| **Sling** | "Dagster supported", Component (`SlingReplicationCollectionComponent`, `connections` + `replications`); example uses `mode: full-refresh` ([Sling integration](https://dagster.io/docs/integrations/libraries/sling)). Pythonic guide lists "full-refresh, incremental, and snapshot" and passes the replication config to the Sling CLI ([Sling (Pythonic)](https://dagster.io/docs/integrations/libraries/sling/sling-pythonic)). Sling modes: `full-refresh` (default), `incremental`, `truncate`, `snapshot`, `backfill`, `definition-only`, `change-capture` ([Sling replication modes](https://docs.slingdata.io/concepts/replication/modes)) | None found |
+| **Airbyte** | "Dagster supported"; `AirbyteWorkspaceComponent` for Cloud and OSS/Self-Managed; one asset per stream; caches workspace metadata ([Airbyte integration](https://dagster.io/docs/integrations/libraries/airbyte), [Airbyte component](https://dagster.io/docs/integrations/libraries/airbyte/airbyte-component)). **Triggers syncs**: "Materializing these assets will trigger a sync of the Airbyte connection"; `AirbyteCloudWorkspace` (Cloud) and `AirbyteWorkspace` (OSS/self-managed) both "launch syncs and monitor their progress"; no observe-only option documented ([dagster-airbyte library reference](https://dagster.io/docs/integrations/libraries/airbyte/dagster-airbyte)) | None found. Airbyte has a case study on temporal.io (*vendor case study, not fetched*) ([Airbyte case study](https://web.temporal.io/case-studies/airbyte-case-study)) |
 | **Fivetran** | "Dagster supported"; `FivetranAccountComponent`; triggering mode (sets connector schedule to "manual" unless `disable_schedule_on_trigger: false`) or observe-only (`polling_sensor: true`); `retry_on_reschedule` ([Fivetran integration](https://dagster.io/docs/integrations/libraries/fivetran)) | None found |
 | **Meltano** | "Community supported" ([Meltano integration](https://dagster.io/docs/integrations/libraries/meltano)) | None found |
 | **Embedded ELT** | Deprecated → `dagster-sling` and `dagster-dlt` ([Embedded ELT (deprecated)](https://dagster.io/docs/integrations/libraries/embedded-elt)) | — |
@@ -86,8 +86,9 @@ flowchart LR
 **Dagster**
 
 - Sensor lists the bucket, stores the last-seen modification time in a **cursor**, and emits one run per file with a **run key** ([Sensors](https://dagster.io/docs/guides/automate/sensors)).
-- Dynamic partitions: the sensor returns `SensorResult` with `dynamic_partitions_requests` plus one run per new file, to "incrementally load new partitions instead of reading the entire bucket" ([Dynamic partitioning](https://dagster.io/blog/dynamic-partitioning), *vendor blog*).
-- Dedicated S3 sensor helper: **Not verified**.
+- Dynamic partitions: the sensor returns `SensorResult` with `dynamic_partitions_requests` plus one run per new file, to "incrementally load new partitions instead of reading the entire bucket" ([Dynamic partitioning](https://dagster.io/blog/dynamic-partitioning), *vendor blog*); the same pattern (`SensorResult` with `RunRequest(partition_key=...)` and `build_add_request`) is in the [Partitions API reference](https://dagster.io/docs/api/dagster/partitions).
+- S3 helper: `dagster-aws` ships `dagster_aws.s3.sensor.get_objects(bucket, prefix, since_key, since_last_modified)`; the older `get_s3_keys` is marked deprecated ("Use get_objects instead"). Found in the package source only; not listed in the [dagster-aws API reference](https://dagster.io/docs/api/libraries/dagster-aws) ([dagster-aws 0.29.29 (PyPI)](https://pypi.org/project/dagster-aws/0.29.29/)). Treat as an unstable helper.
+- Default sensor interval is 30 s when `minimum_interval_seconds` is not set (`DEFAULT_SENSOR_DAEMON_INTERVAL = 30` in package source; not stated in the docs) ([dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/)).
 
 ```mermaid
 flowchart LR
@@ -126,7 +127,8 @@ sequenceDiagram
 
 - Sling replication (Component) or dlt SQL source as assets ([Sling integration](https://dagster.io/docs/integrations/libraries/sling), [dlt integration (Pythonic)](https://dagster.io/docs/integrations/libraries/dlt/dlt-pythonic)).
 - For dlt SQL sources set `defer_table_reflect=True`, else the daemon queries the DB about every minute to refresh definitions ([dlt integration (Pythonic)](https://dagster.io/docs/integrations/libraries/dlt/dlt-pythonic)).
-- Sling incremental modes: **Not verified** on the fetched page ([Sling integration](https://dagster.io/docs/integrations/libraries/sling)).
+- Sling incremental: Sling's own docs define `incremental` (merge/append; strategies: new-data upsert needs `primary_key` + `update_key`, full-data upsert needs `primary_key`, append-only needs `update_key`), `backfill` (re-load an `update_key` range) and `change-capture` (reads the source transaction log) ([Sling replication modes](https://docs.slingdata.io/concepts/replication/modes)).
+- The Dagster Sling pages show only `full-refresh` in examples; the Pythonic guide lists incremental as supported and passes the replication config to the Sling CLI ([Sling (Pythonic)](https://dagster.io/docs/integrations/libraries/sling/sling-pythonic)). No Dagster example of `incremental` or `change-capture` was found.
 - Time-partitioned asset per day/hour lets a window be re-run by re-materializing the partition ([Backfilling data](https://dagster.io/docs/guides/build/partitions-and-backfills/backfilling-data)).
 
 ```mermaid
@@ -153,7 +155,7 @@ flowchart LR
 **Dagster**
 
 - `FivetranAccountComponent`: trigger syncs, or observe with `polling_sensor: true` to see sync history and freshness without triggering ([Fivetran integration](https://dagster.io/docs/integrations/libraries/fivetran)).
-- `AirbyteWorkspaceComponent`: one asset per stream; whether it triggers or only observes is **Not verified** ([Airbyte component](https://dagster.io/docs/integrations/libraries/airbyte/airbyte-component)).
+- `AirbyteWorkspaceComponent`: one asset per stream; materializing an asset **triggers** the Airbyte sync, for both Airbyte Cloud and OSS/self-managed (OSS needs REST and Configuration API URLs) ([dagster-airbyte library reference](https://dagster.io/docs/integrations/libraries/airbyte/dagster-airbyte), [Airbyte component](https://dagster.io/docs/integrations/libraries/airbyte/airbyte-component)). No observe-only mode (like Fivetran's `polling_sensor`) is documented.
 - dbt models link to these assets through `meta.dagster.asset_key` ([dbt integration](https://dagster.io/docs/integrations/libraries/dbt)).
 
 ```mermaid
@@ -163,6 +165,7 @@ flowchart LR
     FA --> DBT["DbtProjectComponent models"]
     AA --> DBT
     PS["polling_sensor: true"] -.->|"observe only"| FA
+    AA -.->|"materialize = trigger sync"| AB["Airbyte Cloud or OSS"]
 ```
 
 ### S5 — Large backfill
@@ -187,7 +190,7 @@ flowchart TB
 **Dagster**
 
 - Backfill partitions from the asset page or lineage graph; default one run per partition, or `multi_run` / `single_run` ([Backfilling data](https://dagster.io/docs/guides/build/partitions-and-backfills/backfilling-data), [Partition backfill strategies](https://dagster.io/docs/examples/best-practices/partition-backfill-strategies)).
-- Run queue (`max_concurrent_runs`) and pools limit pressure on sources ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency)).
+- Run queue (`max_concurrent_runs`, default 10 per the config schema in package source) and pools limit pressure on sources ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency), [dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/)).
 
 ```mermaid
 flowchart LR
@@ -207,7 +210,7 @@ flowchart LR
 | Hard limit | Blob warn 512 KB, error 2 MB; gRPC 4 MB; history 50 MB ([Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)) | No payload limit found in notes; data moves through IO managers or external systems |
 | Configurable | Payload limit configurable on self-hosted, default 2 MB ([Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error)) | — |
 | Recommended fix | Pass references; External Storage (claim check, offloads ≥256 KiB by default, Public Preview, may change before GA); codecs for compression only delay the problem ([Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error), [External Storage](https://docs.temporal.io/external-storage)) | Write data to the warehouse/object store inside the asset; Pipes streams only logs and metadata back ([Dagster Pipes (guide)](https://dagster.io/docs/guides/build/external-pipelines)) |
-| Self-hosted External Storage | **Not verified** that it works with self-hosted servers | — |
+| Self-hosted External Storage | SDK-side: configured on the client/Worker Data Converter; clients and Workers upload/download, history keeps a reference ([External Storage](https://docs.temporal.io/external-storage), [External Storage - Python SDK](https://docs.temporal.io/develop/python/data-handling/external-storage)). No page says it is Cloud-only; no page states a minimum server or SDK version. Self-hosted support is *likely* (*inference*) but **not explicitly stated** | — |
 | Sensor tick size | — | Ticks requesting runs over the size limit fail explicitly (1.13.26) ([dagster-io/dagster releases](https://github.com/dagster-io/dagster/releases)) |
 
 ## 4. Idempotency and delivery semantics
@@ -228,8 +231,8 @@ flowchart LR
 | Global throughput cap | Task-queue rate limit (`max_task_queue_activities_per_second` in Python) enforced by Matching "for the entire queue regardless of how many Workers"; 2 Workers × 5 = 5 ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)) | Concurrency pools across runs protect "shared databases and APIs" ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency)) |
 | Per-process cap | `MaxWorkerActivitiesPerSecond` (multiplies with Workers) ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)) | Run executor limits within a run ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency)) |
 | Concurrency slots | `MaxConcurrentActivityExecutionSize`; "not throughput limits" ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)) | `max_concurrent_runs` in run queue; `default_op_concurrency_limit` ([Managing concurrency](https://dagster.io/docs/guides/operate/managing-concurrency), [dagster.yaml reference](https://dagster.io/docs/deployment/oss/dagster-yaml)) |
-| Ordering | Task Queue Priority & Fairness GA 2026-05-05 ([Temporal changelog](https://temporal.io/changelog)) | Pool queue not strict FIFO; use QueuedRunCoordinator priority rules ([Run coordinators](https://dagster.io/docs/deployment/execution/run-coordinators)) |
-| Gotcha | Different Worker values: last poller wins ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)) | Partitioned dlt assets need concurrency limits because dlt manages state ([dlt integration (Pythonic)](https://dagster.io/docs/integrations/libraries/dlt/dlt-pythonic)) |
+| Ordering | Task Queue Priority & Fairness GA 2026-05-05 ([Temporal changelog](https://temporal.io/changelog)) | With pools, "Dagster+ does **not** guarantee strict FIFO" (page states this for Dagster+; OSS not stated); use QueuedRunCoordinator priority rules ([Run coordinators](https://dagster.io/docs/deployment/execution/run-coordinators)) |
+| Gotcha | Different Worker values: last poller wins ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)) | Concurrency limits are "recommended" for partitioned dlt assets because dlt manages state ([dlt integration (Pythonic)](https://dagster.io/docs/integrations/libraries/dlt/dlt-pythonic)) |
 
 ## 6. Backfills compared
 
@@ -242,73 +245,101 @@ flowchart LR
 
 ## 7. Illustrative code sketches
 
-> **Illustrative only.** These are not runnable. Names in `code` that appear below are confirmed in the research notes; anything in `<angle brackets>` is a placeholder for an SDK call the notes did not confirm. Check the official SDK docs before use.
+> **Illustrative only.** Short sketches, not tested programs. API names were checked against the official docs or package source cited under each block. `read_page`, `merge_into_warehouse` and `list_new_objects` stand for your own code.
 
-### Temporal (Python-flavoured pseudocode): resumable page loader
+### Temporal (Python SDK): resumable page loader
 
 ```python
-# ILLUSTRATIVE PSEUDOCODE - not a runnable Temporal program.
-# Confirmed in notes: heartbeat details reach the retry attempt (Long-Running
-# Activity pattern), max_task_queue_activities_per_second, ParentClosePolicy.ABANDON,
-# workflow.logger. Everything in <...> is a placeholder.
+# ILLUSTRATIVE SKETCH - simplified, not tested.
+from datetime import timedelta
+from temporalio import activity, workflow
+from temporalio.common import RetryPolicy
 
-<activity definition>
-def copy_table(table: str, start_key: str) -> str:
-    last_key = <last heartbeat details> or start_key   # resume point
-    while page := read_page(table, after=last_key):     # your code
-        merge_into_warehouse(page)                       # idempotent MERGE
+@activity.defn
+async def copy_table(table: str, start_key: str) -> str:
+    details = activity.info().heartbeat_details      # last heartbeat, seen on retry
+    last_key = details[0] if details else start_key
+    while page := await read_page(table, after=last_key):   # your code
+        await merge_into_warehouse(page)                     # idempotent MERGE
         last_key = page.last_key
-        <heartbeat>(last_key)                            # checkpoint
-    return last_key                                      # small value, not data
+        activity.heartbeat(last_key)                         # checkpoint
+    return last_key                                          # small value, not data
 
-<workflow definition>
-def ingest_tables(tables: list[str], watermarks: dict) -> None:
-    for t in tables:
-        watermarks[t] = <execute activity>(copy_table, t, watermarks[t],
-            start_to_close_timeout=<duration>,           # required (this or schedule-to-close)
-            heartbeat_timeout=<2-3x heartbeat interval>,
-            retry_policy=<max attempts, non-retryable 4xx types>)
-        workflow.logger.info("loaded %s", t)
+@workflow.defn
+class IngestTables:
+    @workflow.run
+    async def run(self, tables: list[str], marks: dict[str, str]) -> dict[str, str]:
+        for t in tables:
+            marks[t] = await workflow.execute_activity(
+                copy_table, args=[t, marks[t]],
+                start_to_close_timeout=timedelta(hours=2),
+                heartbeat_timeout=timedelta(minutes=1),   # 2-3x heartbeat interval
+                retry_policy=RetryPolicy(
+                    maximum_attempts=10,
+                    non_retryable_error_types=["SourceAuthError"],
+                ),
+            )
+            workflow.logger.info("loaded %s", t)
+        return marks
 
-# Worker option capping calls to the source across ALL workers on the queue:
-# max_task_queue_activities_per_second = 5
+# Worker(client, task_queue="ingest", workflows=[IngestTables],
+#        activities=[copy_table], max_task_queue_activities_per_second=5)
 ```
+
+API sources: `@workflow.defn`, `@workflow.run`, `@activity.defn`, `workflow.execute_activity`, `start_to_close_timeout`, `heartbeat_timeout`, `RetryPolicy` ([Activity Timeouts - Python SDK](https://docs.temporal.io/develop/python/activities/timeouts)); `activity.heartbeat`, `activity.info().heartbeat_details`, 2–3× heartbeat timeout ([Long-Running Activity pattern](https://docs.temporal.io/design-patterns/long-running-activity)); `max_task_queue_activities_per_second` ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)); `args=`, `non_retryable_error_types`, `Worker(...)` keywords ([temporalio 1.36.0 (PyPI)](https://pypi.org/project/temporalio/1.36.0/), package source).
 
 ### Dagster: file-arrival sensor with dynamic partitions
 
 ```python
-# ILLUSTRATIVE PSEUDOCODE - not runnable as written.
-# Confirmed in notes: minimum_interval_seconds, cursor, run_key, SensorResult,
-# dynamic_partitions_requests (from a vendor blog). Everything in <...> is a placeholder.
+# ILLUSTRATIVE SKETCH - simplified, not tested.
+import dagster as dg
 
-<sensor decorator>(minimum_interval_seconds=30)
-def new_files_sensor(context):
-    since = float(<current cursor> or 0)        # cursor persists between ticks
-    new = [o for o in <list bucket objects> if o.modified > since]
-    return SensorResult(
-        dynamic_partitions_requests=[<add partitions>([o.key for o in new])],
-        <run requests>=[<run request>(run_key=o.key, partition=o.key) for o in new],
-        <new cursor>=str(max([o.modified for o in new], default=since)),
+files = dg.DynamicPartitionsDefinition(name="files")
+
+@dg.asset(partitions_def=files)
+def raw_file(context: dg.AssetExecutionContext) -> None:
+    load_file(context.partition_key)              # your code; key = S3 object key
+
+@dg.sensor(target=raw_file, minimum_interval_seconds=30)
+def new_files_sensor(context: dg.SensorEvaluationContext):
+    since = float(context.cursor or 0)            # cursor persists between ticks
+    new = list_new_objects(since)                 # your code (e.g. boto3 listing)
+    return dg.SensorResult(
+        dynamic_partitions_requests=[files.build_add_request([o.key for o in new])],
+        run_requests=[dg.RunRequest(run_key=o.key, partition_key=o.key) for o in new],
+        cursor=str(max([o.modified for o in new], default=since)),
     )   # Dagster skips any run whose run_key was used before
 ```
 
-### Dagster: connector components (YAML fragments)
+API sources: `@sensor(target=..., minimum_interval_seconds=...)`, `SensorResult(run_requests, cursor, dynamic_partitions_requests)`, `RunRequest(run_key, partition_key)`, `context.cursor` ([Schedules and sensors API reference](https://dagster.io/docs/api/dagster/schedules-sensors)); `DynamicPartitionsDefinition(name)`, `build_add_request` ([Partitions API reference](https://dagster.io/docs/api/dagster/partitions)); `@asset(partitions_def=...)` ([Assets API reference](https://dagster.io/docs/api/dagster/assets)); `AssetExecutionContext.partition_key` ([Execution API reference](https://docs.dagster.io/api/dagster/execution)); run-key dedupe ([Sensors](https://dagster.io/docs/guides/automate/sensors)).
+
+### Dagster: connector components (`defs.yaml` fragments)
 
 ```yaml
-# ILLUSTRATIVE FRAGMENTS of defs.yaml - surrounding schema keys are placeholders.
-# Sling (confirmed keys: connections, replications, mode: full-refresh)
-<component type>: dagster_sling.SlingReplicationCollectionComponent
-<attributes>:
-  connections: <source and target connections>
-  replications: <replication config with mode: full-refresh>
+# ILLUSTRATIVE FRAGMENTS - one component per defs.yaml.
+# Sling
+type: dagster_sling.SlingReplicationCollectionComponent
+attributes:
+  connections:
+    DUCKDB:
+      type: duckdb
+      instance: /tmp/my_project.duckdb
+  replications:
+    - path: ./replication.yaml   # Sling config; set mode (e.g. incremental) here
 ---
-# Fivetran (confirmed options: polling_sensor, disable_schedule_on_trigger, retry_on_reschedule)
-<component type>: dagster_fivetran.FivetranAccountComponent
-<attributes>:
-  polling_sensor: true                 # observe syncs without triggering
-  disable_schedule_on_trigger: false   # keep Fivetran's own schedule
-  retry_on_reschedule: <true/false>
+# Fivetran
+type: dagster_fivetran.FivetranAccountComponent
+attributes:
+  workspace:
+    account_id: "{{ env.FIVETRAN_ACCOUNT_ID }}"
+    api_key: "{{ env.FIVETRAN_API_KEY }}"
+    api_secret: "{{ env.FIVETRAN_API_SECRET }}"
+    disable_schedule_on_trigger: false   # keep Fivetran's own schedule
+    retry_on_reschedule: false
+  polling_sensor: true                   # observe syncs without triggering
 ```
+
+API sources: Sling keys ([Sling integration](https://dagster.io/docs/integrations/libraries/sling)); `mode` values ([Sling replication modes](https://docs.slingdata.io/concepts/replication/modes)); Fivetran keys and their placement ([Fivetran integration](https://dagster.io/docs/integrations/libraries/fivetran)).
 
 ## 8. Scenario scorecard
 
@@ -318,7 +349,7 @@ def new_files_sensor(context):
 |---|---|---|---|
 | S1 API polling | 3 | 2 | Temporal: per-page retries, heartbeats, queue-wide rate limit. Dagster: dlt asset + pools, coarser retries |
 | S2 File arrival | 2 | 3 | Dagster: sensor cursor + run key + dynamic partitions. Temporal: no bucket trigger; build lister |
-| S3 DB incremental | 2 | 2 | Temporal: resumable checkpoints. Dagster: Sling/dlt assets + partitions; Sling incremental not verified |
+| S3 DB incremental | 2 | 2 | Temporal: resumable checkpoints. Dagster: Sling/dlt assets + partitions; Sling has incremental/CDC modes, but no Dagster example of them |
 | S4 SaaS connectors | 1 | 3 | Dagster first-party Fivetran/Airbyte/dlt/Sling. Temporal: custom API calls |
 | S5 Large backfill | 2 | 3 | Dagster: partition backfills with policies. Temporal: strong batch patterns but you build data tracking and respect history limits |
 
@@ -360,7 +391,20 @@ def new_files_sensor(context):
 - [S75] [Fivetran integration](https://dagster.io/docs/integrations/libraries/fivetran)
 - [S76] [Meltano integration](https://dagster.io/docs/integrations/libraries/meltano)
 - [S77] [dbt integration](https://dagster.io/docs/integrations/libraries/dbt)
+- [S84] [Execution API reference](https://docs.dagster.io/api/dagster/execution)
 - [S94] [dagster-io/dagster releases](https://github.com/dagster-io/dagster/releases) — *GitHub HTML scraped*
 - [S101] [Dynamic partitioning](https://dagster.io/blog/dynamic-partitioning) — *vendor blog*
+- [S103] [dagster-airbyte library reference](https://dagster.io/docs/integrations/libraries/airbyte/dagster-airbyte)
+- [S104] [Sling (Pythonic)](https://dagster.io/docs/integrations/libraries/sling/sling-pythonic)
+- [S105] [Sling replication modes](https://docs.slingdata.io/concepts/replication/modes) — *Sling's official docs*
+- [S106] [External Storage - Python SDK](https://docs.temporal.io/develop/python/data-handling/external-storage)
+- [S108] [Schedules and sensors API reference](https://dagster.io/docs/api/dagster/schedules-sensors)
+- [S109] [Partitions API reference](https://dagster.io/docs/api/dagster/partitions)
+- [S110] [Assets API reference](https://dagster.io/docs/api/dagster/assets)
+- [S112] [dagster 1.13.29 (PyPI)](https://pypi.org/project/dagster/1.13.29/) — *package source*
+- [S113] [dagster-aws 0.29.29 (PyPI)](https://pypi.org/project/dagster-aws/0.29.29/) — *package source*
+- [S114] [dagster-aws API reference](https://dagster.io/docs/api/libraries/dagster-aws)
+- [S115] [Activity Timeouts - Python SDK](https://docs.temporal.io/develop/python/activities/timeouts)
+- [S116] [temporalio 1.36.0 (PyPI)](https://pypi.org/project/temporalio/1.36.0/) — *package source*
 
 Full numbered list: [references/sources.md](../references/sources.md)

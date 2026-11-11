@@ -11,10 +11,10 @@
 | | Temporal | Dagster |
 |---|---|---|
 | Licence | MIT (server repo) ([temporalio/temporal (GitHub)](https://github.com/temporalio/temporal)) | Apache-2.0 ([dagster-io/dagster (GitHub)](https://github.com/dagster-io/dagster), [PyPI dagster JSON](https://pypi.org/pypi/dagster/json)) |
-| SDK licences | **Not verified** | Libraries versioned in parallel as 0.29.x ([dagster-io/dagster releases](https://github.com/dagster-io/dagster/releases)); licences per library **Not verified** |
+| SDK licences | Python SDK `temporalio` 1.36.0: MIT (PyPI metadata, 2026-11-11) ([temporalio 1.36.0 (PyPI)](https://pypi.org/project/temporalio/1.36.0/)); other SDKs **Not verified** | Libraries versioned in parallel as 0.29.x ([dagster-io/dagster releases](https://github.com/dagster-io/dagster/releases)); `dagster-aws`, `dagster-airbyte`, `dagster-sling` 0.29.29: Apache-2.0 (PyPI metadata) ([dagster-aws 0.29.29 (PyPI)](https://pypi.org/project/dagster-aws/0.29.29/)); other libraries **Not verified** |
 | Stars / forks (2026-11-11, scraped) | ~23.7k / ~2.0k ([temporalio/temporal (GitHub)](https://github.com/temporalio/temporal)) | ~16.1k / ~2.3k ([dagster-io/dagster (GitHub)](https://github.com/dagster-io/dagster)) |
 | Contributors | **Not verified** | **Not verified** |
-| Latest release | v1.32.1 (Oct 8; year inferred 2026); patches v1.31.4, v1.30.8 on Oct 12 ([temporalio/temporal releases](https://github.com/temporalio/temporal/releases)) | 1.13.29 (PyPI, 2026-11-05) ([PyPI dagster JSON](https://pypi.org/pypi/dagster/json)); GitHub marked 1.13.28 "Latest" at fetch time ([dagster-io/dagster releases](https://github.com/dagster-io/dagster/releases)) |
+| Latest release | v1.32.1 (Oct 8; year inferred 2026); patches v1.31.4, v1.30.8 on Oct 12 ([temporalio/temporal releases](https://github.com/temporalio/temporal/releases)) | 1.13.29 (PyPI, uploaded 2026-11-05) ([PyPI dagster JSON](https://pypi.org/pypi/dagster/json)); GitHub Releases still marked 1.13.28 (30 Oct) "Latest" on 2026-11-11 ([dagster-io/dagster releases](https://github.com/dagster-io/dagster/releases)); docs version picker showed "Latest (1.12.8)" on 2026-11-11 ([OSS deployment architecture](https://dagster.io/docs/deployment/oss/oss-deployment-architecture)) |
 | Release cadence | Server patch releases across 3 minor lines ([temporalio/temporal releases](https://github.com/temporalio/temporal/releases)) | 1.13.24 → 1.13.29 between 2026-09-21 and 2026-11-05 ([PyPI dagster JSON](https://pypi.org/pypi/dagster/json)) |
 | Maintainer | Temporal Technologies ([temporalio/temporal (GitHub)](https://github.com/temporalio/temporal)) | Dagster Labs, being acquired by Prefect ([Prefect is acquiring Dagster](https://dagster.io/blog/prefect-is-acquiring-dagster)) |
 | Origin | Fork of Uber's Cadence ([temporalio/temporal (GitHub)](https://github.com/temporalio/temporal)) | — |
@@ -24,10 +24,10 @@
 
 From the vendor's own posts ([Prefect is acquiring Dagster](https://dagster.io/blog/prefect-is-acquiring-dagster), [Dagster Customer FAQ](https://dagster.io/dagster-customer-faq), *vendor blog/FAQ*):
 
-- "Prefect is acquiring Dagster Labs"; about 40 staff join Prefect.
-- Prefect acquires "Dagster's product, codebase, and customer relationships".
+- "Prefect is acquiring Dagster Labs"; "About 40 members of the Dagster team" join Prefect (blog, 2026-07-13).
+- Prefect acquires "Dagster's product, codebase, and customer relationships" (FAQ).
 - "The open-source project will be actively developed, not just maintained."
-- "We have no plans to merge Dagster into Prefect." Commercial offering "continues to operate as it does today".
+- "We have no plans to merge Dagster into Prefect." Commercial offering "continues to operate as it does today" (FAQ). The FAQ says closing is expected "in the coming weeks".
 - Founder Nick Schrock is "moving on from the project and company".
 - At fetch time, dagster.io showed a "Dagster is now part of Prefect" banner ([Why We Built Dagster](https://dagster.io/blog/dagster-the-data-orchestrator)). Exact close date: **Not verified**.
 - Third-party coverage exists but was not fetched ([Prefect expands open source AI stack with Dagster acquisition](https://opensourceforu.com/2026/07/prefect-expands-open-source-ai-stack-with-dagster-acquisition/), [Prefect to acquire Dagster Labs](https://techstrong.ai/features/prefect-to-acquire-dagster-labs-to-drive-ai-workflow-automation/)).
@@ -54,5 +54,8 @@ From the vendor's own posts ([Prefect is acquiring Dagster](https://dagster.io/b
 - [S98] [Prefect expands open source AI stack with Dagster acquisition](https://opensourceforu.com/2026/07/prefect-expands-open-source-ai-stack-with-dagster-acquisition/) — *third-party press, not fetched*
 - [S99] [Prefect to acquire Dagster Labs](https://techstrong.ai/features/prefect-to-acquire-dagster-labs-to-drive-ai-workflow-automation/) — *third-party press, not fetched*
 - [S100] [Why We Built Dagster](https://dagster.io/blog/dagster-the-data-orchestrator) — *vendor blog*
+- [S52] [OSS deployment architecture](https://dagster.io/docs/deployment/oss/oss-deployment-architecture)
+- [S113] [dagster-aws 0.29.29 (PyPI)](https://pypi.org/project/dagster-aws/0.29.29/) — *package metadata*
+- [S116] [temporalio 1.36.0 (PyPI)](https://pypi.org/project/temporalio/1.36.0/) — *package metadata*
 
 Full numbered list: [references/sources.md](../references/sources.md)

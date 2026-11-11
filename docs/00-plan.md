@@ -71,7 +71,7 @@
 - Each claim in these docs maps to a cited URL in [references/sources.md](../references/sources.md).
 - Numbers (limits, defaults, versions) are copied exactly from the notes; no rounding.
 - Where two sources disagree, both are shown and the conflict is logged in doc 13.
-- Code sketches use only API names that appear in the notes; everything else is a placeholder in `<angle brackets>`.
+- Code sketches use only API names checked against official docs or package source (cited under each sketch); they are marked illustrative.
 
 ## 8. Rating rubric
 
