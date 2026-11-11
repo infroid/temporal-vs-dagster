@@ -83,10 +83,12 @@ stateDiagram-v2
 
 **Per-source checks:** row counts vs last Dagster run, primary-key uniqueness in `RAW`, bookmark advanced, no missed schedule times, dbt models built.
 
-**Rollback (any time):**
-1. Pause the Temporal Schedule; cancel any running Workflow for the source.
-2. Wait until that Workflow is closed (cancelled, failed or terminated) and its ELT subprocess or K8s Job and Snowflake queries have stopped. Cancellation is only a request the Workflow and Activity must handle ([Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)); if it does not close in time, terminate it and confirm the process is gone.
-3. Re-enable the Dagster schedule (for a cluster: all of its sources and its dbt trigger). State is in the same backend, so the next run continues from the last good bookmark (if POC-03 passed).
+**Rollback (any time, whole cluster):**
+1. Pause the Temporal Schedules for **every** source in the cluster; cancel any running ingest Workflow for them.
+2. Wait until all of those Workflows are closed (cancelled, failed or terminated) and their ELT subprocesses or K8s Jobs and Snowflake queries have stopped. Cancellation is only a request the Workflow and Activity must handle ([Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)); if one does not close in time, terminate it and confirm the process is gone.
+3. Take the cluster's models out of the Temporal dbt coordinator and wait for any running dbt build to finish.
+4. Re-enable the Dagster schedules/sensors for all of the cluster's sources and its Dagster dbt trigger. State is in the same backend, so the next runs continue from the last good bookmark (if POC-03 passed).
+5. Reconcile schedule times missed during the rollback, as in cutover step 5.
 
 ## 4. Parallel-run guardrails
 
