@@ -66,7 +66,7 @@ flowchart LR
 | Not tested | That Activities retry and need heartbeats to see cancel (documented) |
 | Setup | Activity runs `meltano run …` or the dlt pipeline as a **subprocess**, heartbeats every N s, kills the process group on cancel. Sync Activity with a thread pool `activity_executor`, or async with non-blocking subprocess API |
 | Steps | For S-big and S-dlt: 1. Cancel mid-load. 2. Kill the worker pod mid-load. 3. Let Start-To-Close expire. 4. Inject a Snowflake error after 50 % of rows. After each, let the Retry Policy run to completion |
-| Pass | No orphan process or open Snowflake query after cancel/kill · after retry, row count and primary-key uniqueness in `RAW` match a clean single run · incremental bookmark advances exactly once · cancel is seen within 2× heartbeat interval |
+| Pass | No orphan process or open Snowflake query after cancel/kill · after retry, the set of primary keys and the row values (hash per row) in `RAW` match a clean single run, not just the row count · incremental bookmark advances exactly once · cancel is seen within 2× heartbeat interval |
 | Fail → | Per-source write disposition must change (e.g. append → merge) before that source migrates; record per source |
 | Effort | 3–4 days |
 | Depends | Q11, Q16 |
@@ -77,7 +77,7 @@ flowchart LR
 |---|---|
 | Question | Can a Temporal-run job pick up exactly where the last Dagster run stopped, without a full re-sync, and is a run blocked if both orchestrators fire at once? |
 | Not tested | That dlt restores state from the destination, and Meltano's backend list and lock defaults (documented) |
-| Setup | Use the **same** Meltano state backend/state ID and the **same** dlt pipeline name + dataset + destination as Dagster uses today |
+| Setup | **Isolated copy** of today's Meltano state backend, with the **same** state IDs, used by both a POC Dagster and the POC Temporal (never the prod backend, so prod bookmarks cannot move). dlt: **same** pipeline name + dataset as today, against the cloned Snowflake DB (dlt state lives in the destination, so the clone isolates it) |
 | Steps | 1. Run S-big and S-dlt once in Dagster. 2. Run them once in Temporal. 3. Compare bookmarks and loaded row ranges. 4. Trigger Dagster and Temporal for the same source within seconds |
 | Pass | Step 2 loads only rows newer than step 1 · no gap or overlap in loaded ranges · step 4 results in one load, or a clean lock error on the second, never two writers |
 | Fail → | Cutover must include a one-time state copy or controlled re-sync for that source |
@@ -117,8 +117,8 @@ flowchart LR
 | Question | Can we cap "max N concurrent loads to Snowflake / shared API X" across all workers, even while autoscaling? |
 | Not tested | Rate limit per second (documented) |
 | Setup | Compare: (a) dedicated Task Queue with fixed replicas × slots; (b) semaphore Workflow (acquire/release via Update or Signal); (c) Fairness keys with `matching.enableFairness=true` for fair sharing |
-| Steps | Fire 30 jobs at once with cap N=5; scale workers 1 → 6 during the run; kill a worker holding a permit |
-| Pass | Concurrent count never exceeds N · a killed holder's permit is released within heartbeat timeout · no source starves for longer than the agreed time |
+| Steps | Fire 30 jobs at once with cap N=5; scale workers 1 → 6 during the run; kill a worker holding a permit; start the same source from a Schedule and manually at the same time (source-wide lock, [02](02-feature-mapping.md) row 2) |
+| Pass | Concurrent count never exceeds N · never two runs of one source at once · a killed holder's permit is released within heartbeat timeout · no source starves for longer than the agreed time |
 | Effort | 2–3 days |
 | Depends | Q10, Q18 |
 

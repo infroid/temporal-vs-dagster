@@ -73,22 +73,26 @@ stateDiagram-v2
 - Alerts and dashboards show this source (POC-08).
 - Schedule created **paused**, same cron and time zone as Dagster.
 
-**Cutover:**
-1. Pause the Dagster schedule/sensor for the source.
-2. Wait until no Dagster run is in flight for it.
-3. Unpause the Temporal Schedule (or `temporal schedule trigger` for an immediate run).
-4. Check first run: row counts vs last Dagster run, primary-key uniqueness in `RAW`, bookmark advanced, dbt models built.
+**Cutover (whole cluster at once, see §2):**
+1. Pause the Dagster schedules/sensors for **every** source in the cluster, and the Dagster dbt trigger for the cluster's models.
+2. Wait until no Dagster run is in flight for any of them.
+3. Record each source's last completed schedule time.
+4. Hand the cluster's dbt trigger to the Temporal coordinator, then unpause the cluster's Temporal Schedules.
+5. Reconcile missed work: for each source, any schedule time between step 3 and step 4 is run with `temporal schedule backfill` (or `trigger` if only one). Backfill runs actions that "would have run during a specified time interval" ([CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)).
+6. Verify each source (per-source checks below) before marking the cluster done.
+
+**Per-source checks:** row counts vs last Dagster run, primary-key uniqueness in `RAW`, bookmark advanced, no missed schedule times, dbt models built.
 
 **Rollback (any time):**
 1. Pause the Temporal Schedule; cancel any running Workflow for the source.
-2. Wait until that Workflow is closed (cancelled, failed or terminated) and its ELT subprocess and Snowflake queries have stopped. Cancellation is only a request the Workflow and Activity must handle ([Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)); if it does not close in time, terminate it and confirm the process is gone.
-3. Re-enable the Dagster schedule. State is in the same backend, so the next run continues from the last good bookmark (if POC-03 passed).
+2. Wait until that Workflow is closed (cancelled, failed or terminated) and its ELT subprocess or K8s Job and Snowflake queries have stopped. Cancellation is only a request the Workflow and Activity must handle ([Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)); if it does not close in time, terminate it and confirm the process is gone.
+3. Re-enable the Dagster schedule (for a cluster: all of its sources and its dbt trigger). State is in the same backend, so the next run continues from the last good bookmark (if POC-03 passed).
 
 ## 4. Parallel-run guardrails
 
 - Never let both orchestrators schedule the same source at the same time. Owner of each source is tracked in one table (source → `dagster` / `temporal`).
 - dbt for a cluster is triggered only by the orchestrator that owns the cluster.
-- Optional shadow run (if Q5 needs proof before cutover): Temporal loads the pilot sources into a separate `RAW_SHADOW` database for one week; compare row counts and checksums with `RAW`. *(Cost: double source API load; check Q18 first.)*
+- Optional shadow run (if Q5 needs proof before cutover): Temporal loads the pilot sources into a separate `RAW_SHADOW` database for one week; compare row counts and checksums with `RAW`. Shadow runs must use a **separate** Meltano state backend (or separate state IDs) and a separate dlt dataset, so they never move production bookmarks. *(Cost: double source API load; check Q18 first.)*
 
 ## 5. Main risks and mitigations
 
