@@ -78,7 +78,7 @@ stateDiagram-v2
 2. Wait until no Dagster run is in flight for any of them.
 3. Record each source's last completed schedule time.
 4. Hand the cluster's dbt trigger to the Temporal coordinator, then unpause the cluster's Temporal Schedules.
-5. Reconcile missed work: for each source, any schedule time between step 3 and step 4 is run with `temporal schedule backfill` (or `trigger` if only one). Backfill runs actions that "would have run during a specified time interval" ([CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)).
+5. Reconcile missed work: for each source, every schedule time after its recorded last completed time (step 3) up to the Temporal unpause (step 4), including times skipped while Dagster was paused and draining, is run with `temporal schedule backfill` (or `trigger` if only one). Backfill runs actions that "would have run during a specified time interval" ([CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)).
 6. Verify each source (per-source checks below) before marking the cluster done.
 
 **Per-source checks:** row counts vs last Dagster run, primary-key uniqueness in `RAW`, bookmark advanced, no missed schedule times, dbt models built.
