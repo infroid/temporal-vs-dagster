@@ -81,7 +81,8 @@ stateDiagram-v2
 
 **Rollback (any time):**
 1. Pause the Temporal Schedule; cancel any running Workflow for the source.
-2. Re-enable the Dagster schedule. State is in the same backend, so the next run continues from the last good bookmark (if POC-03 passed).
+2. Wait until that Workflow is closed (cancelled, failed or terminated) and its ELT subprocess and Snowflake queries have stopped. Cancellation is only a request the Workflow and Activity must handle ([Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)); if it does not close in time, terminate it and confirm the process is gone.
+3. Re-enable the Dagster schedule. State is in the same backend, so the next run continues from the last good bookmark (if POC-03 passed).
 
 ## 4. Parallel-run guardrails
 
@@ -104,3 +105,4 @@ stateDiagram-v2
 This plan uses facts already cited in [02](02-feature-mapping.md), [03](03-unknowns-register.md) and [04](04-poc-plan.md). Additional page used:
 
 - [S131] [Temporal CLI schedule command reference](https://docs.temporal.io/cli/command-reference/schedule) — `toggle` pauses/unpauses, `trigger` runs immediately
+- [S128] [Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)

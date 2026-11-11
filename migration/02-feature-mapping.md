@@ -39,7 +39,7 @@ Status: **Known** = documented, no POC. **Unknown** = POC needed (ID in [03](03-
 | 1 | Cron schedule per job | Temporal Schedule (cron/calendar/interval), overlap policies, catch-up, pause | **Known** | [Schedule](https://docs.temporal.io/schedule); CLI `create`, `toggle`, `trigger`, `backfill` ([CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)) |
 | 2 | "Don't start a second run of the same job" | Workflow ID = source name; one open execution per ID; Conflict Policy `Fail` (default) or `UseExisting` | **Known** | "at most one Workflow Execution with a given ID running at any point in time" ([Workflow Id and Run Id](https://docs.temporal.io/workflow-execution/workflowid-runid)) |
 | 3 | Op retry policy | Activity Retry Policy (default unlimited; we must set `maximum_attempts`) | **Known** | [Retry Policies](https://docs.temporal.io/encyclopedia/retry-policies) |
-| 4 | Run timeouts / run monitoring | Activity Start-To-Close + Heartbeat timeouts | **Known** | [Detecting Activity failures](https://docs.temporal.io/encyclopedia/detecting-activity-failures.md) |
+| 4 | Run timeouts / run monitoring | Start-To-Close caps one attempt; Heartbeat Timeout detects stalls; **Schedule-To-Close** caps the total across all retries (set it when a whole-run deadline is needed) | **Known** | [Detecting Activity failures](https://docs.temporal.io/encyclopedia/detecting-activity-failures.md), [Activity Timeouts - Python SDK](https://docs.temporal.io/develop/python/activities/timeouts) |
 | 5 | Large data never passes through orchestrator | Pass IDs only; payload limit 2 MB default | **Known** | [Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults), [Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error) |
 | 6 | Unit tests | Activity env, time skipping, replay tests | **Known** | [Testing - Python SDK](https://docs.temporal.io/develop/python/testing-suite) |
 | 7 | Metrics endpoint | Server + SDK Prometheus metrics; community Grafana dashboards | **Known** | [Monitor Temporal Platform metrics](https://docs.temporal.io/self-hosted-guide/monitoring) |
@@ -73,6 +73,7 @@ Status: **Known** = documented, no POC. **Unknown** = POC needed (ID in [03](03-
 - [S130] [Workflow Id and Run Id](https://docs.temporal.io/workflow-execution/workflowid-runid)
 - [S7] [Retry Policies](https://docs.temporal.io/encyclopedia/retry-policies)
 - [S8] [Detecting Activity failures](https://docs.temporal.io/encyclopedia/detecting-activity-failures.md)
+- [S115] [Activity Timeouts - Python SDK](https://docs.temporal.io/develop/python/activities/timeouts)
 - [S11] [Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)
 - [S17] [Troubleshoot payload size limit](https://docs.temporal.io/troubleshooting/blob-size-limit-error)
 - [S41] [Testing - Python SDK](https://docs.temporal.io/develop/python/testing-suite)
