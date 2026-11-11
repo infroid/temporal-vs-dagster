@@ -85,7 +85,7 @@ stateDiagram-v2
 3. Record each source's last completed schedule time, and list ingests that finished after the Dagster dbt trigger was paused (their dbt work is still pending).
 4. Hand the cluster's dbt trigger to Temporal, then unpause the cluster's Temporal Schedules.
 5. Reconcile missed work: for each source, every schedule time after its recorded last completed time (step 3) up to the Temporal unpause (step 4), including times skipped while Dagster was paused and draining, is run with `temporal schedule backfill` (or `trigger` if only one). Backfill runs actions that "would have run during a specified time interval" ([CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)). For partitioned sources, also check that every partition Dagster marked missing or failed is either backfilled or listed for the owner.
-6. Run the pending dbt work from step 3 once in Temporal (`dbt build --select source:<x>+` per listed source).
+6. Run the pending dbt work from step 3 once in Temporal (`dbt build --select source:<x>+` per listed source, plus `--exclude <shared_model>+` while a split from §2 step 4 is active).
 7. Verify each source (per-source checks below) before marking the cluster done.
 
 **Per-source checks:** row counts vs last Dagster run, primary-key uniqueness in `RAW`, bookmark advanced, no missed schedule times, dbt models built.
