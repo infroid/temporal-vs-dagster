@@ -81,6 +81,7 @@ flowchart LR
 | 13 | [Unverified and open questions](docs/13-unverified-and-open-questions.md) | Gaps, conflicts, third-party claims |
 | — | [Comparison matrix](comparison-matrix.md) | One table, every dimension, cited per cell |
 | — | [Sources](references/sources.md) | All URLs, numbered, grouped by tool and topic |
+| — | [Migration plan: Dagster → Temporal](migration/README.md) | Unknowns register, POC plan and cutover plan for moving ~50 Meltano/dlt + dbt jobs |
 
 ## How claims are verified
 
