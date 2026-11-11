@@ -1,9 +1,10 @@
 # 04 — POC plan
 
 > **Key takeaways**
-> - Re-scoped on 2026-11-12 with the team's answers ([01](01-current-state-and-questions.md)). 10 POCs. Each answers **one** question from the [unknowns register](03-unknowns-register.md) and nothing already documented.
-> - **Step 0 (prerequisite):** POC-11a, a Namespace on the shared Temporal cluster **backed by a persistent DB** (RDS). Nothing else can start without it.
-> - **Wave A (blocking, ~5–6 engineer-weeks):** POC-01 resources, POC-02 ELT in an Activity, POC-03 state continuity, POC-04 dbt coordinator, POC-06 shared rate limits, POC-07 partitions & backfills, POC-11b shared-cluster readiness. If any fails, revisit the decision to migrate.
+> - Re-scoped on 2026-11-12 with the team's answers and follow-ups F1–F8 ([01](01-current-state-and-questions.md) §5). 10 POCs. Each answers **one** question from the [unknowns register](03-unknowns-register.md) and nothing already documented.
+> - **Step 0 (prerequisite):** POC-11a, our own Namespace on the shared cluster (platform PR), a Worker token, and confirmation that persistence is durable (F9).
+> - **POC-07 (partitions) is the biggest risk:** 5-minute partitions and ~2-year backfills mean partitions must be **batched** per Workflow.
+> - **Wave A (blocking, ~6 engineer-weeks):** POC-01 resources, POC-02 ELT in an Activity, POC-03 state continuity, POC-04 dbt coordinator, POC-06 shared rate limits, POC-07 partitions & backfills, POC-11b shared-cluster readiness. If any fails, revisit the decision to migrate.
 > - **Wave B (hardening, ~1.5 engineer-weeks, can overlap):** POC-08 alerting + freshness + logs, POC-09 on-call tasks, POC-10 safe deploys.
 > - **Dropped:** POC-05 (multi-source gating). The team has no wait-for-all rule (Q21), so each source simply builds `source:<x>+`; covered by POC-04.
 > - Effort numbers are **estimates** for one engineer, not facts.
@@ -12,7 +13,7 @@
 
 ```mermaid
 flowchart LR
-  RDS["RDS request<br/>(platform team)"] --> P11a["POC-11a<br/>Namespace on shared cluster<br/>+ persistent DB"]
+  NSPR["Namespace PR + token issuer<br/>(platform team)"] --> P11a["POC-11a<br/>Namespace on shared cluster<br/>+ durable persistence check"]
   subgraph A["Wave A: go / no-go"]
     P11b["POC-11b<br/>Shared-cluster readiness"]
     P01["POC-01<br/>Per-job resources"]
@@ -41,11 +42,13 @@ flowchart LR
 
 ## 2. Shared POC setup
 
-- **Temporal:** the **shared company cluster**, our own non-prod Namespace (POC-11a). We do not install our own server. If the platform team cannot give us a persistent-DB-backed Namespace in time, a temporary dev install (official Helm chart, PostgreSQL) unblocks Wave A **except** POC-11b, which must run on the shared cluster.
+- **Temporal:** the **shared company cluster** (server 1.32.2, SQL visibility on MySQL 8), our own non-prod Namespace (POC-11a). We do not install our own server. If the Namespace is late, a temporary dev install (official Helm chart, same server version) unblocks Wave A **except** POC-11b, which must run on the shared cluster.
+- **Search Attributes:** registered once per Namespace by a Namespace admin with `temporal operator search-attribute create` (not declarative, F2). Budget: 10 Keyword on SQL visibility ([Search Attributes](https://docs.temporal.io/search-attribute)). Proposed: `source`, `tool`, `resource_class`, `partition_key`, `backfill_id`, `status`.
 - **Sources:** pick 4 real sources that cover the mix:
   - **S-big:** the largest/longest Meltano job.
   - **S-dlt:** a dlt job using `merge` or incremental loading.
-  - **S-part:** a partitioned job with a typical backfill (F3–F5).
+  - **S-part-5m:** a 5-minute partitioned job; **S-part-multi:** a multi-dimensional or dynamic partitioned job (F3).
+  - **S-ops:** one non-ELT ops job (F8).
   - **S-token-pair:** two sources that share one API token or rate limit (F6).
 - **Snowflake:** a POC database cloned from `RAW`/`CLEAN`/`SEMANTIC` (zero-copy clone, if allowed) so tests never touch prod.
 - **Evidence:** every POC stores logs, screenshots and a one-page result in `migration/poc-results/POC-xx.md` (to be created per POC).
@@ -58,12 +61,12 @@ flowchart LR
 |---|---|
 | Question | Can the company's shared Temporal cluster run our production loads safely, and what must the platform team add first? |
 | Not tested | That Temporal needs a persistence DB and which versions are supported (documented, [Persistence](https://docs.temporal.io/temporal-service/persistence)) |
-| 11a (prerequisite) | Platform team provisions RDS (PostgreSQL 13.18/14.15/15.10/16.6 or MySQL 8.0.19+) and gives us a non-prod Namespace. Check: start a Workflow, restart every server pod, the Workflow is still there |
-| 11b steps | 1. Record server version, chart/install method, shard count, visibility store (SQL or Elasticsearch) (F1, F2). 2. Ask for, and verify, Namespace retention, our custom Search Attributes, and `matching.enableFairness` for our Namespace. 3. Kill each server service pod and fail over RDS while 10 POC Workflows run. 4. Load test: 50 concurrent ingests + backfill burst from POC-07; watch our latency while another tenant is busy (noisy neighbour). 5. Agree backup/restore and upgrade process with the platform team |
-| Pass | No Workflow lost or stuck after each failure · server ≥ v1.29.1 (needed for POC-10) or an upgrade date is agreed · our Search Attributes and dynamic config are applied · Namespace rate limits do not throttle our peak load · written ownership: who is paged when the cluster is down |
-| Fail → | No DB: blocker, migration cannot start. Version, config or limits missing: list them as platform asks with dates; Wave A continues on a dev install |
-| Effort | 0.5 day (11a, after RDS exists) + 3 days (11b) |
-| Depends | Q2, F1, F2 |
+| 11a (prerequisite) | 1. PR to the platform values files that registers our non-prod Namespace and token issuer (F1). 2. Get a Worker token; confirm how it rotates in long-lived pods (F10). 3. Platform team confirms the **default persistence store** is a durable managed DB (F9). Check: start a Workflow, restart every server pod, the Workflow is still there |
+| 11b steps | 1. Record shard count and Namespace retention. 2. Register our Search Attributes (admin CLI). 3. If POC-06 needs it: PR for `matching.enableFairness` scoped to our Namespace (dynamic config is cluster-wide by default, F2). 4. Kill each server service pod while 10 POC Workflows run; ask the platform team to fail over the DB. 5. Load test: 50 concurrent ingests + the POC-07 backfill burst; watch our latency while another tenant is busy (noisy neighbour), and theirs while ours runs. 6. Agree backup/restore, upgrade and paging with the platform team |
+| Pass | No Workflow lost or stuck after each failure · Worker token refresh works for 24 h without restart · our Search Attributes are registered · Namespace rate limits do not throttle our peak load · our backfill burst does not slow other tenants · written ownership: who is paged when the cluster is down |
+| Fail → | Persistence not durable: blocker until fixed. Config or limits missing: list them as platform asks with dates; Wave A continues on a dev install |
+| Effort | 1 day (11a) + 3 days (11b) |
+| Depends | Q2, F1, F2, F9, F10 |
 
 ### POC-01 — Per-job resource isolation (U01, U02, U16)
 
@@ -85,11 +88,11 @@ flowchart LR
 | Question | When the Activity is cancelled, times out, or its worker dies mid-load, does the Meltano/dlt process stop, and does the retry leave `RAW` without duplicates or gaps? |
 | Not tested | That Activities retry and need heartbeats to see cancel (documented) |
 | Setup | Activity runs `meltano run …` or the dlt pipeline as a **subprocess**, heartbeats every N s, kills the process group on cancel. Sync Activity with a thread pool `activity_executor`, or async with non-blocking subprocess API |
-| Steps | For S-big and S-dlt: 1. Cancel mid-load. 2. Kill the worker pod mid-load. 3. Let Start-To-Close expire. 4. Inject a Snowflake error after 50 % of rows. After each, let the Retry Policy run to completion |
+| Steps | For S-big, S-dlt and S-ops: 1. Cancel mid-load. 2. Kill the worker pod mid-load. 3. Let Start-To-Close expire. 4. Inject a Snowflake error after 50 % of rows. After each, let the Retry Policy run to completion |
 | Pass | No orphan process or open Snowflake query after cancel/kill · after retry, `RAW` matches a clean single run on row count, primary-key uniqueness (no duplicates), the set of primary keys, and row values (hash per row) · incremental bookmark advances exactly once · cancel is seen within 2× heartbeat interval |
 | Fail → | Per-source write disposition must change (e.g. append → merge) before that source migrates; record per source |
 | Effort | 3–4 days |
-| Depends | Q11, Q16 |
+| Depends | Q11, Q16, F8 |
 
 ### POC-03 — Incremental state continuity from Dagster (U05)
 
@@ -98,7 +101,7 @@ flowchart LR
 | Question | Can a Temporal-run job pick up exactly where the last Dagster run stopped, without a full re-sync, and is a run blocked if both orchestrators fire at once? |
 | Not tested | That dlt restores state from the destination, and Meltano's backend list and lock defaults (documented) |
 | Setup | **Isolated copy** of today's Meltano state backend, with the **same** state IDs (including per-partition IDs, if any, F4), used by both a POC Dagster and the POC Temporal (never the prod backend, so prod bookmarks cannot move). dlt: **same** pipeline name + dataset as today, against the cloned Snowflake DB (dlt state lives in the destination, so the clone isolates it) |
-| Steps | 1. Run S-big, S-dlt and one partition of S-part once in Dagster. 2. Run them once in Temporal. 3. Compare bookmarks and loaded row ranges. 4. Trigger Dagster and Temporal for the same source within seconds |
+| Steps | 1. Run S-big, S-dlt and one partition of S-part-5m once in Dagster. 2. Run them once in Temporal. 3. Compare bookmarks and loaded row ranges. 4. Trigger Dagster and Temporal for the same source within seconds |
 | Pass | Step 2 loads only rows newer than step 1 · no gap or overlap in loaded ranges · step 4 results in one load, or a clean lock error on the second, never two writers |
 | Fail → | Cutover must include a one-time state copy or controlled re-sync for that source |
 | Effort | 2 days |
@@ -123,34 +126,35 @@ flowchart LR
 |---|---|
 | Question | Can we enforce today's tag concurrency limits (e.g. "max N jobs per API token") and the global run-queue limit across all workers, even while autoscaling? |
 | Not tested | Task Queue rate limit is per second and queue-wide (documented) |
-| Setup | Use the real keys and values from F6. Compare: (a) one Task Queue per shared token with fixed replicas × slots; (b) a semaphore Workflow per key (acquire/release via Update or Signal); (c) Fairness keys with `matching.enableFairness=true` (only if POC-11b confirms we can set it) |
-| Steps | 1. Fire 30 jobs at once with cap N=5 on one token (S-token-pair + clones). 2. Scale workers 1 → 6 during the run. 3. Kill a worker holding a permit. 4. Start the same source from a Schedule and manually at the same time (source-wide lock, [02](02-feature-mapping.md) row 2). 5. Run a 100-partition backfill of S-part and check the cap still holds |
+| Setup | Input: export of the real `tag_concurrency_limits` and run-queue limit from the Dagster instance config ("many", F6). Compare: (a) one Task Queue per shared token with fixed replicas × slots; (b) a semaphore Workflow per key (acquire/release via Update or Signal); (c) Fairness keys with `matching.enableFairness=true` (needs a platform PR, F2; test only if granted) |
+| Steps | 1. Fire 30 jobs at once with cap N=5 on one token (S-token-pair + clones). 2. Scale workers 1 → 6 during the run. 3. Kill a worker holding a permit. 4. Start the same source from a Schedule and manually at the same time (source-wide lock, [02](02-feature-mapping.md) row 2). 5. Run a backfill of S-part-5m while its 5-minute schedule keeps firing; check the cap still holds and live runs are not starved |
 | Pass | Concurrent count per key never exceeds N · global running count never exceeds the run-queue limit · never two runs of one source at once · a killed holder's permit is released within heartbeat timeout · no source starves for longer than the agreed time |
 | Fail → | Fall back to (a) with one queue per token and accept lower utilisation |
 | Effort | 3 days |
-| Depends | Q10, Q18, F2, F6 |
+| Depends | Q10, Q18, F2, F6 (export) |
 
 ### POC-07 — Partitions and backfills (U11)
 
 | Item | Detail |
 |---|---|
-| Question | Can we run partitioned loads and backfills (> 75 % of jobs) on Temporal, track per-partition status, and keep them consistent with incremental state? |
-| Not tested | Schedule backfill of **schedule times** (documented, [CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)); history size limits (documented) |
-| Setup | `BackfillWorkflow(source, partition_keys or range)` starts one child `IngestWorkflow` per partition with Workflow ID `ingest-<source>-<partition>`, limited by POC-06 caps; Continue-As-New every N children. Partition key passed to Meltano/dlt the same way as today (F4). Per-partition status in Search Attributes (`source`, `partition`, `status`) or a small Snowflake status table |
-| Steps | 1. Scheduled run of S-part creates exactly today's partition key. 2. Backfill the largest real range from F5 (or 365 daily partitions). 3. Fail 5 partitions on purpose; re-run only those. 4. Start the same partition twice. 5. Static/dynamic or multi-dimensional partitions, if F3 says we use them. 6. Check the incremental bookmark after a backfill of old partitions |
-| Pass | Every partition key runs once and lands correct rows · on-call lists failed/missing partitions of a source in one query · re-run of only failed partitions works · a duplicate start is rejected · no Workflow hits history limits · backfill does not move the live incremental bookmark backwards (or the per-partition state model from F4 is reproduced) |
-| Fail → | Keep partitioned sources on Dagster until a partition library is built and passes; this blocks most of the migration |
-| Effort | 5 days |
-| Depends | Q9, F3, F4, F5 |
+| Question | Can we run partitioned loads and backfills (> 75 % of jobs, all partition types, down to 5-minute, ~2-year ranges) on Temporal, track per-partition status, and keep them consistent with incremental state? |
+| Not tested | Schedule backfill of **schedule times** (documented, [CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)); per-Workflow limits: 2,000 pending children (≤ 500 recommended), history error at 51,200 events or 50 MB (documented, [Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)) |
+| Scale | 2 years ≈ 730 daily, 17,520 hourly, **210,240 five-minute** partitions (arithmetic). One child per partition would need hundreds of Continue-As-New cycles and a status row per partition |
+| Setup | **Partition library** in Python: one `PartitionDef` per type (time window with cron, static list, dynamic list stored in Snowflake, multi-dimensional = product of two). `BackfillWorkflow(source, range, batch_size)` splits the range into **batches** (e.g. 1 day of 5-minute partitions = 288 per batch), starts at most K child `IngestWorkflow`s at a time (K under POC-06 caps, ≤ 500), and Continues-As-New every N batches. Child Workflow ID `ingest-<source>-<batch_start>-<batch_end>`. Run config: Dagster Launchpad config + defaults become one typed input dataclass, defaults in code (F4). Status: one row per partition in a Snowflake status table; Search Attributes `partition_key`/`backfill_id` per batch |
+| Steps | 1. Scheduled run of each type (S-part-5m, S-part-multi, a daily, a static, a dynamic) creates exactly today's partition key and run config. 2. Backfill the largest real range (2 years) for S-part-5m on the cloned DB. 3. Fail 5 batches on purpose; re-run only failed partitions. 4. Start the same batch twice. 5. Add a dynamic partition key and backfill it. 6. Check the incremental bookmark after a backfill of old partitions. 7. Compare total runtime and Snowflake cost with Dagster's strategy (F11) |
+| Pass | Every partition key loads once with correct rows (POC-02 checks) · on-call lists failed/missing partitions of a source in one query · re-run of only failed partitions works · a duplicate start is rejected · no Workflow exceeds 10,240 events (warn level) · 2-year backfill finishes within an agreed time and does not starve live schedules · backfill does not move the live incremental bookmark backwards |
+| Fail → | Keep partitioned sources on Dagster until the partition library passes; this blocks most of the migration |
+| Effort | 7 days |
+| Depends | Q9, F3, F4, F5, F11 |
 
 ### POC-08 — Alerting, freshness and logs (U12, U17)
 
 | Item | Detail |
 |---|---|
 | Question | Can we alert to Slack and PagerDuty on the same events as today, replace Dagster freshness checks, and emit logs Sumo Logic can use? |
-| Setup | Server + SDK metrics to Prometheus; alert rules routed to Slack and PagerDuty; a final "on failure" Activity that posts source, run link and error; a freshness check (Schedule + Activity that reads `max(loaded_at)` per table against the F7 thresholds); structured JSON logs with `source`, `workflow_id`, `run_id`, `partition` |
+| Setup | Server + SDK metrics to Prometheus; alert rules routed to Slack and PagerDuty; a final "on failure" Activity that posts source, run link and error; freshness for **almost all assets** (F7): port each Dagster freshness threshold to dbt source `freshness` config and run `dbt source freshness` on a Schedule (non-zero exit on stale, [dbt source command](https://docs.getdbt.com/reference/commands/source)), plus a `max(loaded_at)` check for any asset dbt does not cover; structured JSON logs with `source`, `workflow_id`, `run_id`, `partition` |
 | Steps | Trigger: failed run, stuck run (no heartbeat), missed schedule (worker pool down), stale `RAW` table, failed dbt test. Replay one Workflow and check log lines |
-| Pass | Each case alerts within agreed time with source name and run link · PagerDuty only for the cases that page today · no alert storm on a 10-source outage · freshness alerts match F7 thresholds · logs have the fields above and no duplicate lines on replay (or duplicates are marked) |
+| Pass | Each case alerts within agreed time with source name and run link · PagerDuty only for the cases that page today; freshness failures go to Slack · no alert storm on a 10-source outage · every Dagster freshness check has a Temporal/dbt equivalent with the same threshold · logs have the fields above and no duplicate lines on replay (or duplicates are marked) |
 | Effort | 3 days |
 | Depends | Q12, Q13, Q23, F7 |
 
@@ -159,11 +163,11 @@ flowchart LR
 | Item | Detail |
 |---|---|
 | Question | Can on-call do today's three tasks (Q14) as fast and safely as in Dagster? |
-| Tasks to time | 1. Find which jobs failed in the last 24 h. 2. Re-run a failed job (whole run, or only the failed step). 3. Backfill partitions X–Y for source S (uses POC-07) |
-| Tools | Temporal UI, `temporal` CLI (`schedule trigger`, Workflow Reset, `activity reset`), Search Attributes, a small backfill CLI/script |
+| Tasks to time | 1. Find which jobs failed in the last 24 h. 2. Re-run a failed job (whole run, or only the failed step). 3. Backfill partitions X–Y for source S (uses POC-07). 4. Start a run with edited config, like Dagster Launchpad (F4) |
+| Tools | Temporal UI, `temporal` CLI (`workflow start --input`, `schedule trigger`, Workflow Reset, `activity reset`), Search Attributes, a small backfill/launch CLI that fills config defaults |
 | Pass | Each task doable in ≤ 2 min by someone not on the POC team, using a 1-page runbook |
-| Effort | 1.5 days |
-| Depends | Q14, POC-07 |
+| Effort | 2 days |
+| Depends | Q14, F4, POC-07 |
 
 ### POC-10 — Safe deploys during long loads (U14)
 
@@ -174,14 +178,14 @@ flowchart LR
 | Pass | v1 runs finish on v1 pods with no non-determinism error · new run uses v2 · v1 pods are removed after drain · replay test of v1 histories runs in CI |
 | Fail → | Use Workflow patching (`patched()`) and replay tests instead of Worker Versioning |
 | Effort | 2–3 days |
-| Depends | F1; server ≥ v1.29.1, Python SDK ≥ 1.11 |
+| Depends | Server ≥ v1.29.1 (shared cluster is 1.32.2, F1), Python SDK ≥ 1.11; Worker Controller install approval (U02) |
 
 ## 4. Go / no-go after Wave A
 
 | Result | Decision |
 |---|---|
 | All Wave A POCs pass | Proceed to Wave B and build ([05](05-migration-plan.md)) |
-| No persistent DB on the shared cluster (POC-11a) | **Stop.** Nothing can start until RDS is provisioned |
+| Default persistence not durable (POC-11a, F9) | **Stop.** Nothing can start until it is |
 | POC-11b finds missing version/config/limits | Proceed only with dated platform commitments |
 | POC-01 fails both patterns | Stop; per-job isolation is a hard requirement |
 | POC-07 fails | Stop for partitioned jobs (> 75 %); migrating only the rest is not worth a second orchestrator |
@@ -193,9 +197,9 @@ flowchart LR
 
 | Wave | POCs | Engineer-days |
 |---|---|---|
-| Step 0 | 11a | 0.5 + RDS lead time (platform team) |
-| A | 11b, 01, 02, 03, 04, 06, 07 | 3 + 5 + 4 + 2 + 4 + 3 + 5 ≈ **26** |
-| B | 08, 09, 10 | 3 + 1.5 + 3 ≈ **7.5** |
+| Step 0 | 11a | 1 + Namespace PR lead time (platform team) |
+| A | 11b, 01, 02, 03, 04, 06, 07 | 3 + 5 + 4 + 2 + 4 + 3 + 7 ≈ **28** |
+| B | 08, 09, 10 | 3 + 2 + 3 ≈ **8** |
 
 ## Sources
 
@@ -208,6 +212,7 @@ Facts used in "Not tested" rows and setups are cited in [02](02-feature-mapping.
 - [S128] [Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)
 - [S127] [dlt state](https://dlthub.com/docs/general-usage/state)
 - [S122] [Meltano state backends](https://discovery.meltano.com/concepts/state_backends)
+- [S141] [dbt source command](https://docs.getdbt.com/reference/commands/source)
 - [S120] [dbt programmatic invocations](https://docs.getdbt.com/reference/programmatic-invocations)
 - [S137] [dbt build](https://docs.getdbt.com/reference/commands/build)
 - [S140] [dbt node selection methods](https://docs.getdbt.com/reference/node-selection/methods)

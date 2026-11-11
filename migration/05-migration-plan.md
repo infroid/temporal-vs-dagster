@@ -2,7 +2,7 @@
 
 > **Key takeaways**
 > - Six phases: answers → POCs → foundation → pilot → waves → decommission. No source moves before Wave A POCs pass.
-> - **Critical path starts outside our team:** the shared Temporal cluster needs a persistent DB (RDS) before any POC can run. Request it in P0.
+> - **Critical path starts outside our team:** our Namespace and Worker token on the shared cluster come by platform PR, and the platform team must confirm durable persistence (F9). Start both in P0.
 > - Move sources in **dependency clusters**: all sources that feed the same dbt model move together, so only one orchestrator ever runs dbt on a given model.
 > - Each source cutover is reversible: pause the Temporal Schedule, re-enable the Dagster schedule. Incremental state stays in the same backend, so no reload is needed (if POC-03 passes).
 > - Timeline numbers are **estimates**, not facts.
@@ -11,7 +11,7 @@
 
 ```mermaid
 flowchart LR
-  P0["P0 Answers + RDS request<br/>F1–F8<br/>(1 wk + RDS lead time)"] --> P1["P1 POCs<br/>Wave A → go/no-go<br/>Wave B<br/>(6–8 wks)"]
+  P0["P0 Namespace PR<br/>F9–F11<br/>(1 wk + platform lead time)"] --> P1["P1 POCs<br/>Wave A → go/no-go<br/>Wave B<br/>(6–8 wks)"]
   P1 --> P2["P2 Foundation<br/>prod platform, libraries,<br/>alerts, runbooks<br/>(3–4 wks)"]
   P2 --> P3["P3 Pilot<br/>1 cluster, 2–3 sources<br/>(2 wks)"]
   P3 --> P4["P4 Waves<br/>remaining clusters<br/>(~10 sources / wk)"]
@@ -20,7 +20,7 @@ flowchart LR
 
 | Phase | Output | Exit criteria |
 |---|---|---|
-| P0 Answers | Q1–Q25 answered (done 2026-11-12); F1–F8 answered; RDS requested from the platform team | POC scope frozen; POC-11a Namespace with persistent DB available |
+| P0 Answers | Q1–Q25 and F1–F8 answered (done 2026-11-12); F9–F11 answered; Namespace PR merged; export of Dagster tag concurrency limits, freshness checks, partition definitions and Launchpad defaults; list of non-ELT ops jobs | POC scope frozen; POC-11a Namespace available |
 | P1 POCs | `migration/poc-results/POC-xx.md` per POC | Wave A all pass (see go/no-go in [04](04-poc-plan.md)); Wave B pass or risk accepted in writing |
 | P2 Foundation | Prod Namespace on the shared cluster (POC-11b agreements); worker images; shared library: `IngestWorkflow`, `BackfillWorkflow`, `run_elt` Activity, dbt trigger (POC-04 option); concurrency control (POC-06); Search Attributes; Slack/PagerDuty alerts and freshness checks; replay tests in CI; runbook | Failure drills pass; runbook reviewed by on-call |
 | P3 Pilot | 1 dependency cluster on Temporal | 2 weeks with no duplicates, no missed runs, freshness ≤ today |
@@ -110,7 +110,8 @@ stateDiagram-v2
 | Duplicates after retries | Merge/upsert write dispositions; uniqueness checks after each load | U04 |
 | dbt freshness worse than today | Coordinator batching tuned in POC-04; target lag in alerts | U06, U07 |
 | On-call slower without Dagster UI | Runbook + Search Attributes; dbt docs for lineage | U13 |
-| Shared cluster has no persistent DB, or is down | RDS requested in P0; failure drills, backups and on-call ownership agreed with the platform team (POC-11) | U15 |
+| Shared cluster persistence not durable, or cluster down | Confirm in P0 (F9); failure drills, backups and on-call ownership agreed with the platform team (POC-11) | U15 |
+| Our 2-year backfills slow other tenants on the shared cluster | Batched backfills with caps; load test with the platform team (POC-07, POC-11b) | U11, U15 |
 | Partitioned jobs (> 75 %) cannot be tracked or backfilled | `BackfillWorkflow` + status table proven in POC-07 before any partitioned source moves | U11 |
 | Shared API token over-used during transition | Move token-sharing sources together; split caps if not possible (POC-06) | U09 |
 

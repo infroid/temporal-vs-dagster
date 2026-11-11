@@ -2,8 +2,9 @@
 
 > **Key takeaways**
 > - The team answered Q1–Q25 on 2026-11-12. The working assumptions (A1–A12) of the first draft are replaced by these answers.
-> - Four answers change the plan most: **(1)** Temporal is a **shared company cluster** with **no persistent DB yet** (RDS can be requested); **(2)** **>75 % of jobs use partitions and backfills**; **(3)** many jobs **share API rate limits/tokens**; **(4)** dbt builds **all downstream models per source, with no wait-for-all-sources rule**.
-> - Follow-up questions F1–F8 (section 4) refine the partition, concurrency and shared-cluster POCs.
+> - Four answers change the plan most: **(1)** Temporal is a **shared company cluster**; **(2)** **>75 % of jobs use partitions and backfills**; **(3)** many jobs **share API rate limits/tokens**; **(4)** dbt builds **all downstream models per source, with no wait-for-all-sources rule**.
+> - **Update 2026-11-12 (section 5):** the shared cluster's config shows server **1.32.2** with **MySQL 8 visibility** on a managed database, so the "no persistent DB" blocker is **likely resolved**; confirm with the platform team. Namespaces, dynamic config and Search Attributes are **not self-service** (platform PR or admin CLI).
+> - F3–F8 answered: **every partition type** is used (down to **5-minute**), backfills cover **about 2 years**, partitions reach the job through **Launchpad run config** with defaults, freshness checks cover **almost all assets** (Slack on failure), and some **non-ELT ops jobs** exist.
 
 ## 1. Confirmed setup (today, Dagster)
 
@@ -36,10 +37,10 @@ How `K8sRunLauncher` per-job config works: it accepts `container_config`, `pod_s
 | Area | Fact (from the team) | Impact |
 |---|---|---|
 | Cluster | **One company-wide Temporal on Kubernetes**, meant to replace all orchestrators | We are a tenant, not the operator. Platform POC becomes a readiness check of the shared cluster (POC-11) |
-| Persistence | **No persistent DB today**; RDS can be requested | **Blocker.** "A Temporal Service's only required dependency for basic operation is the Persistence database"; supported: PostgreSQL 13.18/14.15/15.10/16.6, MySQL 5.7/8.0 (8.0.19+), Cassandra; SQLite "meant only for development and testing, not production usage" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). See U15 |
+| Persistence | Q2: "no persistent DB"; RDS can be requested. **Update (§5):** cluster config shows a managed MySQL 8 database for visibility, separate from "the default persistence store" | **Likely resolved, confirm (F9).** Was a blocker: "A Temporal Service's only required dependency for basic operation is the Persistence database"; supported: PostgreSQL 13.18/14.15/15.10/16.6, MySQL 5.7/8.0 (8.0.19+), Cassandra; SQLite "meant only for development and testing, not production usage" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). See U15 |
 | Languages | Python now; maybe others later | Temporal has 8 SDKs ([Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal)) |
 | Side by side | Allowed | Cutover by cluster with rollback ([05](05-migration-plan.md)) |
-| Auth | No SSO/RBAC needed | Dropped from POC-11 |
+| Auth | No SSO/RBAC needed for our UI use | Dropped from POC-11. **But** the shared cluster has a custom JWT authorizer (§5): our Workers need an allowed token issuer |
 | Run history | Clean start is fine; migrate only if easy | Not easy: no official Dagster → Temporal import found (*absence*, [matrix](../comparison-matrix.md) D12). Option: export Dagster run table to Snowflake for reference |
 | "Smooth" | "Fully planned; no surprises or blockers during implementation" | Every POC has explicit pass/fail; Wave A covers every High risk |
 
@@ -74,6 +75,29 @@ How `K8sRunLauncher` per-job config works: it accepts `container_config`, `pod_s
 | F7 | Freshness checks: which assets, what thresholds, who gets paged? | POC-08 |
 | F8 | Are there ops-only jobs that are not ELT (e.g. Python steps, file moves, exports)? | POC-02 scope |
 
+## 5. Answers to follow-ups and shared-cluster facts (2026-11-12)
+
+Shared-cluster facts come from the team's review of the **internal platform repository** for the shared Temporal (names of internal repos, teams and other tenants are left out of this public repo). They are the team's findings, not checked by us.
+
+| F | Answer | Changes |
+|---|---|---|
+| F1 | Server **1.32.2**, Web UI 2.56.1, upstream Helm chart 1.8.0 (vendored); server build patched with a custom JWT authorizer. **Namespace per consumer service**, added by a PR to the platform's values files (namespace + allowed token issuer); the authorizer denies unregistered Namespaces; a namespace-manager job creates them and enables archival | POC-10 version check passes (≥ v1.29.1). POC-11a = Namespace PR + Worker auth |
+| F2 | **Visibility: SQL on MySQL 8**, own database, no Elasticsearch/OpenSearch; S3 only for archival. **Dynamic config: not self-service**, one cluster-wide ConfigMap (empty today); changes need a platform PR and apply cluster-wide unless scoped by Namespace. **Custom Search Attributes: yes, per Namespace**, registered by a Namespace admin with `temporal operator search-attribute create`; not declarative | SQL visibility: 10 Keyword attributes per Namespace ([Search Attributes](https://docs.temporal.io/search-attribute)). Fairness (`matching.enableFairness`) needs a platform PR (POC-06 option c) |
+| F3 | All types: daily, hourly, **5-minute**, static, dynamic, multi-dimensional | POC-07 must cover each type |
+| F4 | Through **Dagster Launchpad run config**, with some default config | Workflow input must carry the same run config + defaults (POC-07, POC-09) |
+| F5 | Large: **about 2 years** of past data | 2 years ≈ 730 daily, 17,520 hourly, **210,240 five-minute** partitions (arithmetic). One child Workflow per partition does not fit: the OSS server allows 2,000 pending children per Workflow and recommends ≤ 500 ([Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)). Batch partitions into ranges (POC-07) |
+| F6 | "There are many" tag concurrency limits | Export the real `tag_concurrency_limits` from the Dagster instance config as POC-06 input |
+| F7 | Freshness checks on **almost all assets**; **Slack** alert when a check fails | POC-08: freshness for every source/asset, Slack (not PagerDuty) |
+| F8 | Yes, some non-ELT ops jobs | POC-02 includes one; inventory them in P0 |
+
+### New follow-ups
+
+| F | Question | Changes |
+|---|---|---|
+| F9 | Platform team: is the **default persistence store** (not just visibility) on a durable managed DB in every environment we will use? | Closes U15 blocker |
+| F10 | Which token issuer will our Workers use, and how are tokens rotated for long-running Worker pods? | POC-11a |
+| F11 | Which Dagster backfill strategy do partitioned jobs use: one run per partition, or one run for a range? | POC-07 batching |
+
 ## Sources
 
 - [S125] [dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)
@@ -81,3 +105,4 @@ How `K8sRunLauncher` per-job config works: it accepts `container_config`, `pod_s
 - [S1] [Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal)
 - [S135] [Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)
 - [S38] [Search Attributes](https://docs.temporal.io/search-attribute)
+- [S11] [Self-hosted defaults](https://docs.temporal.io/self-hosted-guide/defaults)

@@ -215,3 +215,4 @@ Added for [`migration/`](../migration/README.md). Non-Temporal/Dagster pages are
 138. **[S138]** [Events and Event History](https://docs.temporal.io/workflow-execution/event)
 139. **[S139]** [Reset an Activity](https://docs.temporal.io/activity-operations/reset)
 140. **[S140]** [dbt node selection methods](https://docs.getdbt.com/reference/node-selection/methods) — *dbt docs*
+141. **[S141]** [dbt source command](https://docs.getdbt.com/reference/commands/source) — *dbt docs*
