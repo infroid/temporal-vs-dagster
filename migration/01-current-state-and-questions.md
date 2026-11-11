@@ -1,75 +1,83 @@
-# 01 — Current state, open questions and working assumptions
+# 01 — Current state, answers and follow-up questions
 
 > **Key takeaways**
-> - Confirmed from the team: Dagster on Kubernetes via the Helm chart, job-specific resource allocation, ~50 jobs (≈1 per source), Meltano or dlt into Snowflake `RAW`, dbt runs after each ingestion job into `CLEAN` and then `SEMANTIC`.
-> - 25 open questions (Q1–Q25) decide which POCs are needed and how big they are.
-> - Until answers arrive, the plan uses the assumptions **A1–A12** below. Each POC lists which assumptions it depends on.
+> - The team answered Q1–Q25 on 2026-11-12. The working assumptions (A1–A12) of the first draft are replaced by these answers.
+> - Four answers change the plan most: **(1)** Temporal is a **shared company cluster** with **no persistent DB yet** (RDS can be requested); **(2)** **>75 % of jobs use partitions and backfills**; **(3)** many jobs **share API rate limits/tokens**; **(4)** dbt builds **all downstream models per source, with no wait-for-all-sources rule**.
+> - Follow-up questions F1–F8 (section 4) refine the partition, concurrency and shared-cluster POCs.
 
-## 1. What is confirmed
+## 1. Confirmed setup (today, Dagster)
 
 | Area | Fact (from the team) |
 |---|---|
-| Orchestrator | Dagster, deployed with the Dagster Helm chart on Kubernetes |
-| Resource control | Job-specific resource allocation (CPU/memory per job) |
-| Scale | 50+ jobs, roughly one per source |
-| Ingestion tools | Meltano or dlt (mix) |
-| Landing | Snowflake `RAW` database |
-| Transform | dbt runs when a job's ingestion finishes; writes `CLEAN`, then `SEMANTIC` (joins, filters, complex logic) |
-| Direction | Move from Dagster to Temporal |
+| Scale | 50+ jobs, about one per source |
+| Dagster | Latest version; uses **jobs, ops and assets**; integrations `dagster-dbt`, `dagster-dlt`, `dagster-meltano` |
+| Code layout | **1 code location, 1 image** |
+| Run launch | `K8sRunLauncher` (Helm chart); per-job resources via `dagster-k8s/config` tags |
+| Triggers | Dagster schedules; **a sensor starts dbt after an ingestion job finishes** |
+| Partitions | **> 75 % of jobs** are partitioned and use backfills |
+| Concurrency | Run queue limit + tag concurrency limits |
+| Retries | Run retries |
+| Quality | Dagster freshness checks + dbt tests |
+| Alerting | Slack and PagerDuty on failure |
+| UI use | See failed jobs, re-run, backfill |
+| Secrets | AWS Secrets Manager → Kubernetes Secrets → env vars in pods |
+| Ingestion | Mostly Meltano; 10–15 of 50 use dlt or plain Python; dlt state in Snowflake (default) |
+| Sources | APIs, databases, CDC, files (S3/SFTP), SaaS |
+| Rate limits | Many sources share API rate limits and tokens across jobs |
+| dbt | dbt Core, latest version compatible with Dagster (same virtualenv) |
+| dbt trigger rule | When a source finishes, **all its downstream models** build. No waiting for other sources |
+| dbt overlap | Two sources finishing together **both** trigger their downstream dbt runs |
+| Logs | Sumo Logic, run by another team; we must emit good logs |
 
-### How Dagster does per-job resources today (for reference)
+How `K8sRunLauncher` per-job config works: it accepts `container_config`, `pod_spec_config`, `pod_template_spec_metadata`, `job_spec_config`, `job_metadata`; tag config on a `@job` "will only apply to the run level" ([dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)). So each run gets its own pod with its own requests/limits.
 
-- `K8sRunLauncher` takes `run_k8s_config` with `container_config`, `pod_spec_config`, `pod_template_spec_metadata`, `job_spec_config`, `job_metadata` ([dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)).
-- Tag-based config on a `@job` "will only apply to the run level"; per-step config must be set on each `@op` ([dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)).
-- `k8s_job_executor` "launches steps as Kubernetes Jobs" ([dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)).
+## 2. Target (Temporal)
 
-Net effect: each run (or step) gets its **own pod** with its **own requests/limits**. Temporal has no equivalent launcher (see [02](02-feature-mapping.md) and U01).
-
-## 2. Open questions
-
-Asked in the project thread on 2026-11-11. **Impact** says which POC or decision the answer changes.
-
-| Q | Question | Impact |
+| Area | Fact (from the team) | Impact |
 |---|---|---|
-| Q1 | Why leave Dagster; which pain points must Temporal fix? | Success criteria |
-| Q2 | Self-hosted Temporal on same K8s (Helm) or Temporal Cloud? Persistence DB? Elasticsearch? | POC-11 scope |
-| Q3 | Python-only workers? | All POCs |
-| Q4 | Timeline; can both run side by side? | [05](05-migration-plan.md) |
-| Q5 | Definition of "100% smooth" (no dupes, SLAs, alerts) | Pass criteria |
-| Q6 | Dagster version; assets vs ops; `dagster-dbt` / `dagster-dlt` / `dagster-meltano` / subprocess? | POC-05 |
-| Q7 | Run launcher / executor; per-job tags; node selectors, tolerations, service accounts, secrets, volumes? | POC-01 |
-| Q8 | Cron schedules vs sensors vs declarative automation; counts | POC-07 (conditional) |
-| Q9 | Partitions / backfills: frequency and size | POC-07 (conditional) |
-| Q10 | Concurrency controls: run queue, tag limits, pools | POC-06 |
-| Q11 | Run retries / op retry policies | POC-02 |
-| Q12 | Asset checks, freshness policies; do dbt test failures block downstream? | POC-04, POC-08 |
-| Q13 | Alerting channel and mechanism | POC-08 |
-| Q14 | Who uses the Dagster UI and for what | POC-09 |
-| Q15 | Code locations / images; secrets source | POC-01 |
-| Q16 | Meltano vs dlt split; Meltano state backend; dlt state location | POC-02, POC-03 |
-| Q17 | Source kinds; largest run (time, size) | POC-01, POC-02 |
-| Q18 | Shared API rate limits / tokens across jobs | POC-06 |
-| Q19 | dbt Core or dbt Cloud; version | POC-04 |
-| Q20 | dbt selection after a source finishes (`source:x+` or full) | POC-04, POC-05 |
-| Q21 | Do `SEMANTIC` models wait for **all** upstream sources? | POC-05 |
-| Q22 | What happens when two jobs finish together and both trigger dbt? | POC-04 |
-| Q23 | Metrics/logs stack; CI/CD | POC-08, POC-10 |
-| Q24 | SSO / RBAC needed on UI? | POC-11 |
-| Q25 | Migrate run history or clean start? | [05](05-migration-plan.md) |
+| Cluster | **One company-wide Temporal on Kubernetes**, meant to replace all orchestrators | We are a tenant, not the operator. Platform POC becomes a readiness check of the shared cluster (POC-11) |
+| Persistence | **No persistent DB today**; RDS can be requested | **Blocker.** "A Temporal Service's only required dependency for basic operation is the Persistence database"; supported: PostgreSQL 13.18/14.15/15.10/16.6, MySQL 5.7/8.0 (8.0.19+), Cassandra; SQLite "meant only for development and testing, not production usage" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). See U15 |
+| Languages | Python now; maybe others later | Temporal has 8 SDKs ([Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal)) |
+| Side by side | Allowed | Cutover by cluster with rollback ([05](05-migration-plan.md)) |
+| Auth | No SSO/RBAC needed | Dropped from POC-11 |
+| Run history | Clean start is fine; migrate only if easy | Not easy: no official Dagster → Temporal import found (*absence*, [matrix](../comparison-matrix.md) D12). Option: export Dagster run table to Snowflake for reference |
+| "Smooth" | "Fully planned; no surprises or blockers during implementation" | Every POC has explicit pass/fail; Wave A covers every High risk |
 
-## 3. Working assumptions (until answered)
+## 3. Answers to the original questions
 
-| A | Assumption | Replaces |
+| Q | Answer | Q | Answer |
+|---|---|---|---|
+| Q1 | Company standardises on one Temporal | Q14 | Failures, re-run, backfill |
+| Q2 | Shared cluster on K8s; no DB yet; RDS possible | Q15 | 1 code location/image; AWS SM → K8s Secrets → env |
+| Q3 | Python (others possible) | Q16 | Mostly Meltano; 10–15 dlt/Python; dlt state in Snowflake |
+| Q4 | Side by side OK | Q17 | All source types |
+| Q5 | No surprises in implementation | Q18 | Many shared rate limits/tokens |
+| Q6 | Latest; jobs + ops + assets; all 3 integrations | Q19 | dbt Core latest (Dagster-compatible) |
+| Q7 | `K8sRunLauncher`, per-job tags | Q20 | All downstream models |
+| Q8 | Schedules + dbt-after-job sensor | Q21 | No wait-for-all |
+| Q9 | Partitions in > 75 % of jobs; backfills | Q22 | Both trigger dbt |
+| Q10 | Run queue limit + tag limits | Q23 | Sumo Logic (other team); we log well |
+| Q11 | Run retries | Q24 | No SSO/RBAC |
+| Q12 | Freshness checks + dbt tests | Q25 | Clean start OK |
+| Q13 | Slack + PagerDuty | | |
+
+## 4. Follow-up questions (asked 2026-11-12)
+
+| F | Question | Changes |
 |---|---|---|
-| A1 | Self-hosted Temporal OSS on the same Kubernetes platform, PostgreSQL persistence, SQL visibility | Q2 |
-| A2 | Workers in Python (`temporalio`) | Q3 |
-| A3 | Dagster and Temporal can run side by side for several weeks | Q4 |
-| A4 | "Smooth" = no data loss, no duplicate rows in `RAW`, freshness no worse than today, same alert coverage | Q5 |
-| A5 | Jobs run Meltano/dlt in their own pod with per-job requests/limits; some use per-job secrets | Q7, Q15 |
-| A6 | Mostly cron schedules; a few sensors | Q8 |
-| A7 | Few or no partitioned assets | Q9 |
-| A8 | Some concurrency limits exist (e.g. cap on Snowflake loads) | Q10 |
-| A9 | dbt Core 1.x, run in-cluster; dagster-dbt assets | Q6, Q19 |
-| A10 | After source X loads, its downstream models run; `SEMANTIC` models that join sources depend on Dagster's asset graph to decide when to run | Q20, Q21 |
-| A11 | Alerts go to Slack (or similar) via Dagster sensors | Q13 |
-| A12 | Clean start for run history; no history migration | Q25 |
+| F1 | Shared Temporal: which server version; who operates it; is it the dev server or the Helm chart; will we get our own Namespace? | POC-11; Worker Versioning needs server ≥ v1.29.1 ([Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)) |
+| F2 | Can the platform team set dynamic config for our Namespace (e.g. `matching.enableFairness`) and add custom Search Attributes? Which visibility store (SQL or Elasticsearch)? | POC-06, POC-09; SQL visibility allows 10 Keyword attributes per Namespace ([Search Attributes](https://docs.temporal.io/search-attribute)) |
+| F3 | Partition types used: daily/hourly time windows, static lists, dynamic, multi-dimensional? | POC-07 |
+| F4 | How does a partition reach Meltano/dlt today (e.g. start/end date env vars, `--state-id` per partition, full refresh of a window)? | POC-07, POC-03 |
+| F5 | Typical and largest backfill (number of partitions, parallel runs)? | POC-07 |
+| F6 | Tag concurrency limits: which keys (per API token, per Snowflake warehouse, per source) and values? | POC-06 |
+| F7 | Freshness checks: which assets, what thresholds, who gets paged? | POC-08 |
+| F8 | Are there ops-only jobs that are not ELT (e.g. Python steps, file moves, exports)? | POC-02 scope |
+
+## Sources
+
+- [S125] [dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)
+- [S3] [Persistence](https://docs.temporal.io/temporal-service/persistence)
+- [S1] [Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal)
+- [S135] [Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)
+- [S38] [Search Attributes](https://docs.temporal.io/search-attribute)

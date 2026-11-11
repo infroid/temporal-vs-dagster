@@ -1,24 +1,25 @@
 # 02 — Feature mapping: Dagster → Temporal
 
 > **Key takeaways**
-> - 9 of 22 capabilities map to documented Temporal features and need **no POC**.
-> - 13 need a POC, because Temporal has no built-in equivalent (data awareness, per-run pods, alerting) or because the behaviour depends on our tools (Meltano, dlt, dbt, Snowflake).
-> - The target design is: **one ingest Workflow per source**, **ELT in an Activity**, and **one dbt coordinator Workflow** that decides what dbt runs and when.
+> - Updated 2026-11-12 with the team's answers. 11 of 22 capabilities map to documented features and need **no POC** (rows 15 and 17 closed by Q8 and Q21).
+> - 11 need a POC, because Temporal has no built-in equivalent (per-run pods, partitions, concurrency caps, alerting) or because the behaviour depends on our tools (Meltano, dlt, dbt, Snowflake) or the shared cluster.
+> - The target design is: **one ingest Workflow per source (and partition)**, **ELT in an Activity**, and a **dbt trigger** that builds `source:<x>+` after each load, either one dbt process per load or via one coordinator (POC-04 decides).
 
 ## 1. Target design (proposed, to be validated by POCs)
 
 ```mermaid
 flowchart TB
   SCH["Temporal Schedule per source<br/>(cron, overlap=Skip)"] --> IW
-  subgraph IW["IngestWorkflow(source)"]
+  BF["BackfillWorkflow<br/>(partition range, POC-07)"] --> IW
+  subgraph IW["IngestWorkflow(source, partition)"]
     direction TB
     A1["Activity: run_elt(source)<br/>Meltano or dlt subprocess<br/>heartbeat every N s"] --> A2["Activity: post-load checks<br/>(row counts, freshness)"]
   end
   IW -->|"Signal-With-Start:<br/>source_loaded(source, run_id)"| DC
   subgraph DC["DbtCoordinatorWorkflow (single, long-lived)"]
     direction TB
-    Q["Queue of loaded sources"] --> G["Gate: which models are ready?<br/>(dbt manifest: source → models)"]
-    G --> B["Activity: dbt build --select ...<br/>(one at a time or non-overlapping)"]
+    Q["Queue of loaded sources"] --> G["Select: source:x+<br/>(all downstream models, no waiting)"]
+    G --> B["Activity: dbt build --select source:x+<br/>(parallel if selections do not overlap)"]
   end
   B --> SNOW[("Snowflake<br/>CLEAN / SEMANTIC")]
   A1 --> RAW[("Snowflake RAW")]
@@ -26,7 +27,8 @@ flowchart TB
   DC -. failure .-> AL
 ```
 
-- **Why a single coordinator:** dbt does not support parallel invocations in one process ([dbt programmatic invocations](https://docs.getdbt.com/reference/programmatic-invocations)), and two overlapping `dbt build` runs on the same models "could lead to unpredictable results" (same page). One coordinator serialises or de-overlaps dbt work.
+- **What dbt builds:** after source `x` loads, all its downstream models, with no wait for other sources (Q20, Q21). `source:x+` selects models that read source `x` and their descendants ([dbt node selection methods](https://docs.getdbt.com/reference/node-selection/methods)).
+- **Why maybe a coordinator:** today two sources finishing together both trigger dbt (Q22). dbt does not support parallel invocations in one process ([dbt programmatic invocations](https://docs.getdbt.com/reference/programmatic-invocations)), and two overlapping `dbt build` runs on the same models "could lead to unpredictable results" (same page). A coordinator de-overlaps dbt work; POC-04 compares it with today's parallel behaviour.
 - **Why Signal-With-Start:** it "starts a Workflow when Signaling it if it does not already exist. If already running, it receives the Signal directly", atomically ([Signal with Start pattern](https://docs.temporal.io/design-patterns/signal-with-start)).
 - The coordinator is an *entity Workflow*; it needs Continue-As-New to stay under history limits (51,200 events or 10K Signals) and must de-duplicate Signals, which "can be delivered more than once" ([Signal with Start pattern](https://docs.temporal.io/design-patterns/signal-with-start)).
 
@@ -50,22 +52,23 @@ Status: **Known** = documented, no POC. **Unknown** = POC needed (ID in [03](03-
 | 12 | Retry after partial load | Activities "may be executed multiple times" | **Unknown** | [Activity Definition](https://docs.temporal.io/activity-definition); effect on Meltano/dlt + Snowflake not documented → **U04** |
 | 13 | Incremental state (bookmarks) | Keep Meltano state backend / dlt destination state | **Unknown** | dlt restores state from destination by pipeline name + destination + dataset ([dlt state](https://dlthub.com/docs/general-usage/state)); Meltano state backends and locks ([Meltano state backends](https://discovery.meltano.com/concepts/state_backends)); continuity from Dagster-era runs untested → **U05** |
 | 14 | dbt after each ingestion | Coordinator Workflow + dbt subprocess Activity | **Unknown** | dbt in-process parallelism unsupported ([dbt programmatic invocations](https://docs.getdbt.com/reference/programmatic-invocations)); behaviour under many near-simultaneous loads untested → **U06, U08** |
-| 15 | `SEMANTIC` models wait for several sources (asset graph / declarative automation) | Gate in coordinator using dbt manifest | **Unknown** | Temporal has no lineage or upstream-aware triggers (*inference*, [comparison matrix](../comparison-matrix.md) D4/D5) → **U07** |
-| 16 | Concurrency pools / run queue | Worker slots, Task Queue rate limit, Fairness keys, or a semaphore Workflow | **Unknown** | Rate limit is per-second, not a concurrency cap ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)); Fairness off by default on self-hosted (`matching.enableFairness`) ([Priority and Fairness](https://docs.temporal.io/develop/task-queue-priority-fairness)) → **U09** |
-| 17 | Sensors (file arrival, run status) | Polling Workflow on a Schedule with cursor | **Unknown** (conditional on Q8) | No sensor primitive (*inference*) → **U10** |
-| 18 | Partitions + backfills | Partition key as Workflow input; Schedule backfill for time ranges | **Unknown** (conditional on Q9) | Schedule backfill exists ([Schedule](https://docs.temporal.io/schedule)); no partition status tracking (*inference*) → **U11** |
-| 19 | Failure alerts (sensors / Slack) | Metrics alerts and/or failure-handler Activity | **Unknown** | Server docs recommend no alerts; "configure Grafana Alerts" ([Monitor Temporal Platform metrics](https://docs.temporal.io/self-hosted-guide/monitoring)) → **U12** |
-| 20 | UI: asset catalog, lineage, re-execute from failure, launchpad | Temporal UI (executions), Search Attributes, Workflow Reset, Activity Reset; dbt docs for lineage | **Unknown** | SQL visibility allows only 10 Keyword custom Search Attributes per Namespace ([Search Attributes](https://docs.temporal.io/search-attribute)); Reset only to Workflow Task events ([Events and Event History](https://docs.temporal.io/workflow-execution/event)) → **U13** |
+| 15 | Build all downstream models of a loaded source | `dbt build --select source:<x>+`; no wait-for-all rule (Q21) | **Known** | [dbt node selection methods](https://docs.getdbt.com/reference/node-selection/methods); U07 closed |
+| 16 | Run queue limit + tag concurrency limits (shared API tokens, Q10, Q18) | Worker slots, Task Queue rate limit, Fairness keys, or a semaphore Workflow | **Unknown** | Rate limit is per-second, not a concurrency cap ([Downstream Rate Limiting](https://docs.temporal.io/design-patterns/downstream-rate-limiting)); Fairness off by default on self-hosted (`matching.enableFairness`) ([Priority and Fairness](https://docs.temporal.io/develop/task-queue-priority-fairness)) → **U09** |
+| 17 | Sensor: start dbt after an ingestion job (the only sensor, Q8) | Ingest Workflow starts dbt (or signals the coordinator) on success | **Known** | Workflow code calls the next step; [Signal with Start pattern](https://docs.temporal.io/design-patterns/signal-with-start); U10 closed |
+| 18 | Partitions + backfills (> 75 % of jobs, Q9) | Partition key as Workflow input; `BackfillWorkflow` starts one child per partition; status in Search Attributes or a table | **Unknown (High)** | Schedule backfill only re-runs schedule times ([CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)); no partition status tracking (*inference*) → **U11** |
+| 19 | Slack + PagerDuty on failure; freshness checks (Q12, Q13) | Metrics alerts, failure-handler Activity, scheduled freshness Activity | **Unknown** | Server docs recommend no alerts; "configure Grafana Alerts" ([Monitor Temporal Platform metrics](https://docs.temporal.io/self-hosted-guide/monitoring)) → **U12, U17** |
+| 20 | UI: see failures, re-run, backfill (Q14) | Temporal UI (executions), Search Attributes, Workflow Reset, Activity Reset; dbt docs for lineage | **Unknown** | SQL visibility allows only 10 Keyword custom Search Attributes per Namespace ([Search Attributes](https://docs.temporal.io/search-attribute)); Reset only to Workflow Task events ([Events and Event History](https://docs.temporal.io/workflow-execution/event)) → **U13** |
 | 21 | Code deploys without breaking runs | Worker Versioning (Pinned) + Worker Controller | **Unknown** | Versioning needs self-hosted server ≥ v1.29.1, Python SDK ≥ 1.11 ([Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)); GA blog does not say OSS is covered ([GA blog](https://temporal.io/blog/ga-worker-versioning-public-preview-upgrade-on-continue-as-new)) → **U14** |
-| 22 | Platform run by us (Helm) | Temporal Helm chart + external DB | **Unknown** | Chart README does not say "production-ready"; "You must provide persistence" ([helm-charts](https://github.com/temporalio/helm-charts)); History shard count fixed at creation ([Temporal Server](https://docs.temporal.io/temporal-service/temporal-server)) → **U15** |
+| 22 | Platform (today: our Dagster Helm install) | Shared company Temporal cluster, our own Namespace; needs a persistent DB (RDS) | **Unknown (blocker)** | "only required dependency … is the Persistence database" ([Persistence](https://docs.temporal.io/temporal-service/persistence)); "You must provide persistence" ([helm-charts](https://github.com/temporalio/helm-charts)); team says no DB today → **U15** |
 
 ## 3. Things Temporal will **not** give us (accept or build)
 
 | Lost capability | Replacement | Decision owner |
 |---|---|---|
-| Asset catalog and cross-tool lineage | dbt docs/lineage for dbt models; source → model map from `manifest.json` | Team (Q14) |
-| Partition status grid | Our own table or Search Attributes (if Q9 says partitions are used) | Team |
-| Dagster run history | None; keep Dagster DB read-only for audit until retention passes | Team (Q25) |
+| Asset catalog and cross-tool lineage | dbt docs/lineage for dbt models (team uses the UI only for failures, re-run, backfill, Q14) | Team |
+| Partition status grid | Our own table or Search Attributes (POC-07) | Team |
+| Freshness checks | Scheduled freshness Activity + alert (POC-08) | Team |
+| Dagster run history | Clean start (Q25); optional export of the Dagster run table to Snowflake; keep Dagster DB read-only until retention passes | Team |
 
 ## Sources
 
@@ -94,6 +97,8 @@ Status: **Known** = documented, no POC. **Unknown** = POC needed (ID in [03](03-
 - [S135] [Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)
 - [S136] [Announcing GA for Worker Versioning](https://temporal.io/blog/ga-worker-versioning-public-preview-upgrade-on-continue-as-new) — *vendor blog*
 - [S126] [temporalio/helm-charts](https://github.com/temporalio/helm-charts)
+- [S3] [Persistence](https://docs.temporal.io/temporal-service/persistence)
+- [S140] [dbt node selection methods](https://docs.getdbt.com/reference/node-selection/methods) — *dbt docs*
 - [S2] [Temporal Server](https://docs.temporal.io/temporal-service/temporal-server)
 - [S131] [Temporal CLI schedule command reference](https://docs.temporal.io/cli/command-reference/schedule)
 - [S125] [dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)
