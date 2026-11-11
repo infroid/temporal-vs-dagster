@@ -50,7 +50,7 @@ How to build clusters:
 1. Parse dbt `manifest.json`: for each model, list upstream sources.
 2. Union-find: sources that share any downstream model, or share an API token (F6), go in one cluster.
 3. Order clusters: smallest and least critical first; the cluster with S-big after the pilot proves POC-01 in prod.
-4. If one cluster is too big (e.g. a "core" model joins 30 sources), split by moving that model's dbt trigger to a schedule during the transition, and say so in the wave plan.
+4. If one cluster is too big (e.g. a "core" model joins 30 sources), split it: during the transition the shared model and its descendants are built **only** by one scheduled dbt job, and both orchestrators' per-source builds exclude them (`dbt build --select source:<x>+ --exclude <shared_model>+`). Say so in the wave plan; remove the exclusion when the last source of the split moves.
 
 ## 3. Per-source cutover runbook
 
@@ -82,19 +82,20 @@ stateDiagram-v2
 **Cutover (whole cluster at once, see §2):**
 1. Pause the Dagster schedules/sensors for **every** source in the cluster, and the Dagster dbt trigger for the cluster's models.
 2. Wait until no Dagster run is in flight for any of them.
-3. Record each source's last completed schedule time.
+3. Record each source's last completed schedule time, and list ingests that finished after the Dagster dbt trigger was paused (their dbt work is still pending).
 4. Hand the cluster's dbt trigger to Temporal, then unpause the cluster's Temporal Schedules.
 5. Reconcile missed work: for each source, every schedule time after its recorded last completed time (step 3) up to the Temporal unpause (step 4), including times skipped while Dagster was paused and draining, is run with `temporal schedule backfill` (or `trigger` if only one). Backfill runs actions that "would have run during a specified time interval" ([CLI schedule](https://docs.temporal.io/cli/command-reference/schedule)). For partitioned sources, also check that every partition Dagster marked missing or failed is either backfilled or listed for the owner.
-6. Verify each source (per-source checks below) before marking the cluster done.
+6. Run the pending dbt work from step 3 once in Temporal (`dbt build --select source:<x>+` per listed source).
+7. Verify each source (per-source checks below) before marking the cluster done.
 
 **Per-source checks:** row counts vs last Dagster run, primary-key uniqueness in `RAW`, bookmark advanced, no missed schedule times, dbt models built.
 
 **Rollback (any time, whole cluster):**
-1. Pause the Temporal Schedules for **every** source in the cluster; cancel any running ingest or backfill Workflow for them.
+1. Pause the Temporal Schedules for **every** source in the cluster; record the schedule time and partitions of every running ingest or backfill Workflow, then cancel them.
 2. Wait until all of those Workflows are closed (cancelled, failed or terminated) and their ELT subprocesses or K8s Jobs and Snowflake queries have stopped. Cancellation is only a request the Workflow and Activity must handle ([Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)); if one does not close in time, terminate it and confirm the process is gone.
 3. Turn off the Temporal dbt trigger for the cluster's models and wait for any running dbt build to finish.
 4. Re-enable the Dagster schedules/sensors for all of the cluster's sources and its Dagster dbt trigger. State is in the same backend, so the next runs continue from the last good bookmark (if POC-03 passed).
-5. Reconcile schedule times missed during the rollback, as in cutover step 5.
+5. Reconcile, in Dagster: the schedule times and partitions recorded in step 1 (cancelled work), plus schedule times missed during the rollback, as in cutover step 5. Also run dbt for any source whose load completed in Temporal but whose dbt build did not.
 
 ## 4. Parallel-run guardrails
 
