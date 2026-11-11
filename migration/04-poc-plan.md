@@ -66,7 +66,7 @@ flowchart LR
 | Not tested | That Activities retry and need heartbeats to see cancel (documented) |
 | Setup | Activity runs `meltano run …` or the dlt pipeline as a **subprocess**, heartbeats every N s, kills the process group on cancel. Sync Activity with a thread pool `activity_executor`, or async with non-blocking subprocess API |
 | Steps | For S-big and S-dlt: 1. Cancel mid-load. 2. Kill the worker pod mid-load. 3. Let Start-To-Close expire. 4. Inject a Snowflake error after 50 % of rows. After each, let the Retry Policy run to completion |
-| Pass | No orphan process or open Snowflake query after cancel/kill · after retry, the set of primary keys and the row values (hash per row) in `RAW` match a clean single run, not just the row count · incremental bookmark advances exactly once · cancel is seen within 2× heartbeat interval |
+| Pass | No orphan process or open Snowflake query after cancel/kill · after retry, `RAW` matches a clean single run on row count, primary-key uniqueness (no duplicates), the set of primary keys, and row values (hash per row) · incremental bookmark advances exactly once · cancel is seen within 2× heartbeat interval |
 | Fail → | Per-source write disposition must change (e.g. append → merge) before that source migrates; record per source |
 | Effort | 3–4 days |
 | Depends | Q11, Q16 |
