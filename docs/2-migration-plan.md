@@ -9,7 +9,8 @@ Plan to move ~50 ingestion jobs (Meltano or dlt → Snowflake `RAW`, then dbt �
 | Top risk | Partitions and backfills (U11): > 75 % of jobs, every partition type down to 5-minute, backfills of ~2 years |
 | Then | Per-job resource isolation (U01), shared API rate limits (U09), ELT state and duplicates under retries (U04, U05) |
 | Builds on | [1-comparison.md](1-comparison.md). Citations `[S#]` link to [sources.md](sources.md) |
-| Estimates | Effort and timeline numbers are **estimates**, not facts. Risk ratings are **judgement** |
+| Method | Separates what is **already verified** (Known, no POC) from what is **unknown**. Each unknown maps to one POC with pass/fail criteria |
+| Estimates | Effort and timeline numbers are **estimates** for one engineer, not facts. Risk ratings are **judgement** |
 
 **Status labels used below**
 
@@ -21,6 +22,9 @@ Plan to move ~50 ingestion jobs (Meltano or dlt → Snowflake `RAW`, then dbt �
 | Q#, F# | Team answer that drives a decision ([§2.3](#23-team-answers)) |
 
 ## Contents
+
+The plan reads top to bottom as one chain: **facts → design → mapping → unknowns → POCs → cutover**. Every section opens with an **In short** box.
+
 
 1. [Big picture](#1-big-picture)
 2. [Current state and target](#2-current-state-and-target)
@@ -67,6 +71,11 @@ flowchart LR
 ---
 
 ## 2. Current state and target
+
+> **In short**
+> - 50+ Meltano/dlt jobs on Dagster with per-run pods, > 75 % partitioned, shared API tokens, dbt after every load.
+> - Target is a tenant Namespace on a shared Temporal 1.32.2 cluster with durable MySQL; Namespace, dynamic config and Search Attributes need platform PRs.
+> - Four answers shape the plan most: shared cluster (Q1, Q2); > 75 % partitioned (Q9); shared API tokens (Q18); dbt builds all downstream per source, no wait-for-all (Q20, Q21).
 
 ### 2.1 Today (Dagster)
 
@@ -164,6 +173,10 @@ Cluster facts come from the team's review of the internal platform repository. T
 
 ## 3. Target design
 
+> **In short**
+> - One ingest Workflow per source (and partition batch); ELT tool as a subprocess in an Activity.
+> - After each load, dbt builds `source:<x>+`, either one dbt process per load or via one coordinator (POC-04 decides).
+
 Proposed; validated by the POCs.
 
 ```mermaid
@@ -197,6 +210,10 @@ flowchart TB
 ---
 
 ## 4. Feature mapping
+
+> **In short**
+> - 22 capabilities in use today: **11 Known** (documented, no POC; rows 15 and 17 closed by Q21 and Q8) and **11 Unknown** (POC needed).
+> - Unknowns are where Temporal has no built-in equivalent (per-run pods, partitions, concurrency caps, alerting) or where behaviour depends on our tools (Meltano, dlt, dbt, Snowflake) or the shared cluster.
 
 **Known** = documented, no POC. **Unknown** = POC needed (U-ID in [§5](#5-unknowns-register)).
 
@@ -237,6 +254,10 @@ flowchart TB
 ---
 
 ## 5. Unknowns register
+
+> **In short**
+> - 16 open unknowns, 4 closed. **Top risk: U11** (partitions and backfills; ≈ 210,240 five-minute partitions over 2 years, so batching is required).
+> - High risks must pass before any cutover.
 
 ```mermaid
 quadrantChart
@@ -305,6 +326,12 @@ quadrantChart
 ---
 
 ## 6. POC plan
+
+> **In short**
+> - **Step 0:** POC-11a, our Namespace (platform PR) and a Worker reading its token from the provided path.
+> - **Wave A (blocking, ~6 engineer-weeks):** POC-11b, 01, 02, 03, 04, 06, 07. If any fails, revisit the decision to migrate.
+> - **Wave B (hardening, ~1.5 engineer-weeks, can overlap):** POC-08, 09, 10.
+> - POC-07 (partitions) is the biggest risk.
 
 Each POC answers **one** question from [§5](#5-unknowns-register) and nothing already documented. 10 POCs. POC-05 (multi-source gating) was dropped: no wait-for-all rule (Q21); covered by POC-04.
 
@@ -497,6 +524,11 @@ flowchart LR
 ---
 
 ## 7. Migration plan
+
+> **In short**
+> - Six phases: prepare → POCs → foundation → pilot → waves → decommission. No source moves before Wave A passes.
+> - Move sources in **dependency clusters**, so only one orchestrator ever runs dbt on a given model.
+> - Each cutover is reversible: pause the Temporal Schedules, re-enable Dagster. State stays in the same backend, so no reload is needed (if POC-03 passes).
 
 ### 7.1 Phases
 

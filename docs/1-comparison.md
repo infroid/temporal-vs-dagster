@@ -25,7 +25,9 @@ Open source, self-hosted **Temporal** vs open source, self-hosted **Dagster**, f
 11. [Security](#11-security)
 12. [Licensing and community](#12-licensing-and-community)
 13. [Using both together](#13-using-both-together)
-14. [Method](#14-method): scope, scenarios, rubric, source policy
+14. [Method](#14-method): scope, dimensions, scenarios, rubric, source policy
+
+Sections 2–13 share one layout: **In short** box → details (Temporal, Dagster, side by side) → **Verdict**.
 
 ---
 
@@ -79,21 +81,23 @@ flowchart LR
 
 Ratings use the 0–3 rubric in [§14](#14-method) and are **judgements**. Facts are cited; details in the linked section.
 
-| Dimension | Temporal OSS | Dagster OSS | T | D | Section |
-|---|---|---|:-:|:-:|---|
-| D1 Core abstraction | Deterministic Workflows + Activities [S5](sources.md#s5) | Software-defined assets; ops/jobs below [S93](sources.md#s93) | 2 | 3 | [§2](#2-philosophy-and-core-model) |
-| D2 Operations | 4 services + DB (+ optional Elasticsearch); shard count fixed at creation [S2](sources.md#s2) [S3](sources.md#s3) | 3 services + DB; single daemon, no replicas [S52](sources.md#s52) | 1 | 2 | [§3](#3-architecture) |
-| D3 Durability | Replay + Activity heartbeat checkpoints [S5](sources.md#s5) [S20](sources.md#s20) | Step retry, run retry, re-execute from failure [S58](sources.md#s58) [S59](sources.md#s59) | 3 | 2 | [§4](#4-execution-model-and-durability) |
-| D4 Scheduling and triggers | Schedules: 6 overlap policies, 1-year catch-up, jitter [S10](sources.md#s10) | Sensors (cursor, run key) + Declarative Automation [S61](sources.md#s61) [S60](sources.md#s60) | 3 | 3 | [§5](#5-scheduling-and-triggers) |
-| D5 Data awareness | None built in (*inference*) | Lineage, partitions, partition backfills, asset checks [S78](sources.md#s78) [S64](sources.md#s64) [S83](sources.md#s83) | 0 | 3 | [§6](#6-data-awareness-lineage-and-partitions) |
-| D6 Ingestion: connectors | Your own Activities (*inference*) | dlt, Sling, Airbyte, Fivetran supported; Meltano community [S68](sources.md#s68) | 1 | 3 | [§7](#7-data-ingestion) |
-| D6 Ingestion: custom / high volume | Queue-wide rate limits, sliding window, heartbeats [S24](sources.md#s24) [S21](sources.md#s21) | Pools, backfill policies; coarser retries [S63](sources.md#s63) [S65](sources.md#s65) | 3 | 2 | [§7](#7-data-ingestion) |
-| D7 Observability in OSS | Prometheus + OpenTelemetry in SDKs; execution-centric UI [S32](sources.md#s32) [S31](sources.md#s31) | Lineage/catalog UI; alerts are Dagster+ [S78](sources.md#s78) [S79](sources.md#s79) | 2 | 2 | [§8](#8-observability-and-ui) |
-| D8 Testing and DX | Time skipping, replay tests; determinism + versioning overhead [S41](sources.md#s41) [S44](sources.md#s44) | Plain pytest, asset checks; reload code location [S82](sources.md#s82) [S78](sources.md#s78) | 2 | 3 | [§9](#9-testing-and-developer-experience) |
-| D9 Scale headroom | Sharded server; 1–128K shards run successfully [S2](sources.md#s2) | Run launchers/executors; single daemon [S56](sources.md#s56) [S52](sources.md#s52) | 3 | 2 | [§10](#10-deployment-scaling-and-limits) |
-| D10 Security in OSS | mTLS, Authorizer, JWT, SSO, codecs [S45](sources.md#s45) | None built in [S89](sources.md#s89) | 2 | 0 | [§11](#11-security) |
-| D11 Licensing and stewardship | MIT [S48](sources.md#s48) | Apache-2.0; ownership change [S95](sources.md#s95) [S96](sources.md#s96) | 3 | 2 | [§12](#12-licensing-and-community) |
-| D12 Interoperability | No official Dagster integration (*absence*) | No Temporal integration listed [S68](sources.md#s68) | 0 | 0 | [§13](#13-using-both-together) |
+| Dimension | Temporal OSS | Dagster OSS | T | D | Why the rating (*judgement*) | Section |
+|---|---|---|:-:|:-:|---|---|
+| D1 Core abstraction | Deterministic Workflows + Activities [S5](sources.md#s5) | Software-defined assets; ops/jobs below [S93](sources.md#s93) | 2 | 3 | Assets match "tables to keep fresh" | [§2](#2-philosophy-and-core-model) |
+| D2 Operations | 4 services + DB (+ optional Elasticsearch); shard count fixed at creation [S2](sources.md#s2) [S3](sources.md#s3) | 3 services + DB; single daemon, no replicas [S52](sources.md#s52) | 1 | 2 | 4 services + DB + shards vs 3 services + DB, but single daemon | [§3](#3-architecture) |
+| D3 Durability | Replay + Activity heartbeat checkpoints [S5](sources.md#s5) [S20](sources.md#s20) | Step retry, run retry, re-execute from failure [S58](sources.md#s58) [S59](sources.md#s59) | 3 | 2 | Mid-step resume vs step-level recovery | [§4](#4-execution-model-and-durability) |
+| D4 Scheduling and triggers | Schedules: 6 overlap policies, 1-year catch-up, jitter [S10](sources.md#s10) | Sensors (cursor, run key) + Declarative Automation [S61](sources.md#s61) [S60](sources.md#s60) | 3 | 3 | Time scheduling vs data-aware triggers | [§5](#5-scheduling-and-triggers) |
+| D5 Data awareness | None built in (*inference*) | Lineage, partitions, partition backfills, asset checks [S78](sources.md#s78) [S64](sources.md#s64) [S83](sources.md#s83) | 0 | 3 | Lineage, partitions, checks | [§6](#6-data-awareness-lineage-and-partitions) |
+| D6 Ingestion: connectors | Your own Activities (*inference*) | dlt, Sling, Airbyte, Fivetran supported; Meltano community [S68](sources.md#s68) | 1 | 3 | First-party ELT components | [§7](#7-data-ingestion) |
+| D6 Ingestion: custom / high volume | Queue-wide rate limits, sliding window, heartbeats [S24](sources.md#s24) [S21](sources.md#s21) | Pools, backfill policies; coarser retries [S63](sources.md#s63) [S65](sources.md#s65) | 3 | 2 | Rate limits, sliding window, heartbeats | [§7](#7-data-ingestion) |
+| D7 Observability in OSS | Prometheus + OpenTelemetry in SDKs; execution-centric UI [S32](sources.md#s32) [S31](sources.md#s31) | Lineage/catalog UI; alerts are Dagster+ [S78](sources.md#s78) [S79](sources.md#s79) | 2 | 2 | Metrics/tracing vs lineage/catalog; alerts missing in both | [§8](#8-observability-and-ui) |
+| D8 Testing and DX | Time skipping, replay tests; determinism + versioning overhead [S41](sources.md#s41) [S44](sources.md#s44) | Plain pytest, asset checks; reload code location [S82](sources.md#s82) [S78](sources.md#s78) | 2 | 3 | Determinism and versioning overhead | [§9](#9-testing-and-developer-experience) |
+| D9 Scale headroom | Sharded server; 1–128K shards run successfully [S2](sources.md#s2) | Run launchers/executors; single daemon [S56](sources.md#s56) [S52](sources.md#s52) | 3 | 2 | Sharded server vs single daemon | [§10](#10-deployment-scaling-and-limits) |
+| D10 Security in OSS | mTLS, Authorizer, JWT, SSO, codecs [S45](sources.md#s45) | None built in [S89](sources.md#s89) | 2 | 0 | Opt-in controls vs none built in | [§11](#11-security) |
+| D11 Licensing and stewardship | MIT [S48](sources.md#s48) | Apache-2.0; ownership change [S95](sources.md#s95) [S96](sources.md#s96) | 3 | 2 | Both permissive; ownership change for Dagster | [§12](#12-licensing-and-community) |
+| D12 Interoperability | No official Dagster integration (*absence*) | No Temporal integration listed [S68](sources.md#s68) | 0 | 0 | No official integration | [§13](#13-using-both-together) |
+
+**Overall** (*judgement*): Dagster leads on data awareness, connectors and ramp-up; Temporal leads on durability, language reach, rate limiting and OSS security.
 
 ### 1.3 When to pick which (per scenario)
 
@@ -108,6 +112,8 @@ Scenario IDs SC1–SC5 are defined in [§14](#14-method). Scores T/D are the 0�
 | SC3 DB incremental batch to warehouse | 2 | 2 | Dagster | Sling/dlt assets, time partitions [S71](sources.md#s71) [S64](sources.md#s64) | Sling has incremental/backfill/change-capture modes, but Dagster pages only show `full-refresh` [S105](sources.md#s105) [S71](sources.md#s71) |
 | SC3 DB copy with custom merge + resumability | | | Temporal | Checkpointed Activities; idempotency keys [S20](sources.md#s20) [S6](sources.md#s6) | Write MERGE logic yourself |
 | SC4 Fivetran/Airbyte orchestration | 1 | 3 | Dagster | First-party components; observe-only mode for Fivetran [S75](sources.md#s75) [S74](sources.md#s74) | Airbyte component triggers syncs; no observe-only mode documented [S103](sources.md#s103) |
+| SC4 ELT from SaaS apps into a warehouse, then dbt | | | Dagster | First-party Fivetran, Airbyte, dlt, Sling and dbt asset integrations with table-level lineage [S68](sources.md#s68) [S77](sources.md#s77) | — |
+| SC5 Daily/hourly partitioned loads with frequent backfills | | | Dagster | Partition-aware backfills: one run per partition, or single-run ranges [S64](sources.md#s64) [S65](sources.md#s65) | — |
 | SC5 Partitioned backfill of a year | 2 | 3 | Dagster | Backfill policies [S65](sources.md#s65) | `single_run` failure retries everything [S65](sources.md#s65) |
 | SC5 Backfill of 1M documents/items | | | Temporal | Child Workflows + sliding window + Continue-As-New; 1M-doc case [S21](sources.md#s21) [S28](sources.md#s28) | History limits 51,200 events / 50 MB [S12](sources.md#s12) |
 | Mixed-language team (Go/Java/TS/.NET) | | | Temporal | 8 SDK languages; Dagster definitions are Python [S1](sources.md#s1) [S66](sources.md#s66) | |
@@ -151,6 +157,12 @@ flowchart TD
 
 ## 2. Philosophy and core model
 
+> **In short**
+> - **Temporal** is a general **durable-execution engine**: code runs to completion "whether that takes a second or a year", even across crashes [S1](sources.md#s1).
+> - **Dagster** is a **data orchestrator** built around **software-defined assets** [S93](sources.md#s93).
+> - Temporal knows Workflows, Activities and events, not datasets. Dagster knows assets, partitions and lineage, but recovers only at step/asset boundaries.
+> - Neither vendor publishes an official comparison with the other [S102](sources.md#s102).
+
 | | Temporal (OSS) | Dagster (OSS) |
 |---|---|---|
 | Self-description | Durable Execution: a started Workflow runs to completion "whether that takes a second or a year"; after a crash another process rebuilds state and resumes [S1](sources.md#s1) | "An orchestration platform for the development, production, and observation of data assets" [S93](sources.md#s93) |
@@ -174,6 +186,9 @@ flowchart LR
     end
 ```
 
+- **Temporal:** you write a program. The engine records each step in an Event History and can replay the program to rebuild state [S5](sources.md#s5).
+- **Dagster:** you declare data assets and their dependencies. The engine records materializations and shows them in a lineage graph [S64](sources.md#s64) [S66](sources.md#s66).
+
 **What each tool is not**
 
 - Temporal **does not run your code** on its servers; your Workers do. The docs call the opposite belief a "common misconception" [S1](sources.md#s1).
@@ -181,11 +196,17 @@ flowchart LR
 - No fetched Dagster page claims Temporal-style durable execution (event-sourced replay); recovery is per step or asset using persisted outputs [S59](sources.md#s59).
 - No official comparison exists from either vendor; the only one found is an AI-generated forum answer [S102](sources.md#s102) (*third-party, not authoritative*).
 
-*Judgement:* "**move many things reliably**" (API pages, documents, files with complex retry/state) fits Temporal. "**Keep these tables fresh and know where they came from**" fits Dagster. Many teams have both ([§13](#13-using-both-together)).
+**Verdict** (*judgement*): "**move many things reliably**" (API pages, documents, files with complex retry/state) fits Temporal. "**Keep these tables fresh and know where they came from**" fits Dagster. Many teams have both ([§13](#13-using-both-together)).
 
 ---
 
 ## 3. Architecture
+
+> **In short**
+> - **Temporal Server** = 4 Go services (Frontend, History, Matching, internal Worker) + a database (Cassandra, PostgreSQL or MySQL) + a visibility store (SQL or Elasticsearch) [S2](sources.md#s2) [S3](sources.md#s3).
+> - **Dagster OSS** = 3 long-running services (webserver, one daemon, code-location gRPC servers) + a run launcher that starts a run worker per run [S52](sources.md#s52).
+> - In both, **user code runs outside the control plane**: Temporal Workers; Dagster code servers, run workers and step processes.
+> - Dagster's daemon **does not support replicas** [S52](sources.md#s52). Temporal services scale independently; History Shard count is fixed at creation [S2](sources.md#s2).
 
 ### 3.1 Temporal OSS
 
@@ -289,11 +310,18 @@ sequenceDiagram
 | Fixed at creation | Number of History Shards [S2](sources.md#s2) | None found |
 | Reference packaging | Docker Compose: PostgreSQL + Elasticsearch, gRPC 7233, UI 8080 [S14](sources.md#s14) | Helm chart: daemon, webserver (guide port-forwards local 8080 to pod port 80), user-code gRPC servers, in-cluster PostgreSQL [S88](sources.md#s88) |
 
-*Inference:* Temporal is heavier to operate (4 service roles, DB schema migrations, optional Elasticsearch). Dagster's single daemon is a single point of failure for schedules and sensors that relies on the platform (e.g. Kubernetes) to restart it.
+**Verdict** (*inference*): Temporal is heavier to operate (4 service roles, DB schema migrations, optional Elasticsearch). Dagster's single daemon is a single point of failure for schedules and sensors that relies on the platform (e.g. Kubernetes) to restart it.
 
 ---
 
 ## 4. Execution model and durability
+
+> **In short**
+> - **Temporal** records every Workflow step in an **Event History** and rebuilds state by **replay**; Workflow code must be deterministic; all I/O goes in **Activities** [S5](sources.md#s5).
+> - Temporal **Activities retry forever by default** (1 s, ×2.0, max 100 s); **Workflows do not retry by default** [S7](sources.md#s7).
+> - **Dagster** recovers at **step/asset** level: `RetryPolicy`, `run_retries`, and `FROM_FAILURE` re-execution that reuses persisted outputs [S58](sources.md#s58) [S59](sources.md#s59).
+> - Temporal can resume **inside** a long Activity via heartbeat checkpoints [S20](sources.md#s20); Dagster re-runs a failed step from its start (*inference*).
+> - Temporal's price: determinism rules and versioning discipline for every Workflow change [S44](sources.md#s44).
 
 ### 4.1 Temporal: Workflows, Activities, replay
 
@@ -413,11 +441,18 @@ sequenceDiagram
 | Code-change constraint | Deterministic Workflow code; versioning/patching [S44](sources.md#s44) | None documented; reload code location [S78](sources.md#s78) |
 | "Durable execution" claim | Yes [S1](sources.md#s1) | No fetched page claims it |
 
-*Judgement:* Temporal's durability is finer-grained and more general; Dagster's is coarser but tied to data outputs, which is often what an ingestion team wants to re-run.
+**Verdict** (*judgement*): Temporal's durability is finer-grained and more general; Dagster's is coarser but tied to data outputs, which is often what an ingestion team wants to re-run.
 
 ---
 
 ## 5. Scheduling and triggers
+
+> **In short**
+> - **Temporal Schedules** are first-class objects: interval, calendar or cron specs, 6 overlap policies (default **Skip**), 1-year catch-up, backfill, pause, jitter [S10](sources.md#s10).
+> - **Dagster** evaluates schedules, sensors and **Declarative Automation** in its single daemon [S52](sources.md#s52) [S60](sources.md#s60).
+> - Dagster **sensors** poll on a minimum interval, keep a **cursor**, dedupe runs by **run key**; default timeout **60 s** [S61](sources.md#s61) [S62](sources.md#s62).
+> - Temporal's event-style triggers are **Signals and Updates** sent to running Workflows; their semantics were **not verified** (limits only).
+> - Temporal backfills replay **schedule times**; Dagster backfills target **data partitions** [S10](sources.md#s10) [S64](sources.md#s64).
 
 ### 5.1 Temporal Schedules [S10](sources.md#s10)
 
@@ -484,11 +519,17 @@ sequenceDiagram
 | Backfill | Over past schedule times [S10](sources.md#s10) | Over partitions [S64](sources.md#s64) |
 | Scheduler HA | Server services scale out [S2](sources.md#s2) | Single daemon, no replicas [S52](sources.md#s52) |
 
-*Judgement:* Temporal's Schedule is the more complete *time* scheduler (overlap, catch-up, jitter). Dagster's triggers are more *data*-aware (cursors, run keys, upstream-driven automation).
+**Verdict** (*judgement*): Temporal's Schedule is the more complete *time* scheduler (overlap, catch-up, jitter). Dagster's triggers are more *data*-aware (cursors, run keys, upstream-driven automation).
 
 ---
 
 ## 6. Data awareness, lineage and partitions
+
+> **In short**
+> - **Dagster** stores asset **materializations and metadata** and shows them in a **lineage graph** [S64](sources.md#s64) [S66](sources.md#s66).
+> - Dagster **partitioned assets** backfill one run per partition (default), batched `multi_run`, or `single_run` over a range [S64](sources.md#s64) [S65](sources.md#s65).
+> - Ingestion integrations (dlt, Sling, Airbyte, Fivetran) produce **one asset per table/stream**; dbt sources link to them for end-to-end lineage [S77](sources.md#s77).
+> - **Temporal** has no built-in datasets, lineage, partitions or data-quality checks (*inference*); Search Attributes can tag executions with business keys [S32](sources.md#s32).
 
 | Capability | Temporal OSS | Dagster OSS |
 |---|---|---|
@@ -551,11 +592,17 @@ flowchart LR
 - Custom Search Attributes (e.g. `partition_date`) to find executions per data unit [S32](sources.md#s32).
 - Lineage and data-quality checks need another tool; Temporal documents none.
 
-*Judgement:* data awareness is Dagster's clearest advantage for ingestion that feeds analytics.
+**Verdict** (*judgement*): data awareness is Dagster's clearest advantage for ingestion that feeds analytics.
 
 ---
 
 ## 7. Data ingestion
+
+> **In short**
+> - **Dagster** ships first-party integrations for **dlt, Sling, Airbyte, Fivetran** (and dbt downstream), each table/stream an asset; Meltano is community-maintained; `dagster-embedded-elt` is deprecated [S68](sources.md#s68) [S72](sources.md#s72).
+> - **Temporal** ships **no data connectors** (none found); it gives durable primitives: retries, heartbeat checkpoints, batch patterns, queue-wide rate limits [S20](sources.md#s20) [S21](sources.md#s21) [S24](sources.md#s24).
+> - **Large data never goes through Temporal payloads**: 2 MB default; pass references or use **External Storage** (Public Preview; self-hosted support not explicitly stated) [S17](sources.md#s17) [S18](sources.md#s18).
+> - Both are **at-least-once** per work unit: Activities "may be executed multiple times" [S6](sources.md#s6); Dagster dedupes *runs* with sensor run keys [S61](sources.md#s61). Writes must be idempotent in both.
 
 ### 7.1 Integrations
 
@@ -842,9 +889,17 @@ attributes:
 
 API sources: Sling keys [S71](sources.md#s71); `mode` values [S105](sources.md#s105); Fivetran keys and placement [S75](sources.md#s75).
 
+**Verdict** (*judgement*): Dagster wins on connector-based ELT and partition backfills; Temporal wins on custom, high-fan-out, rate-limited or long-running extraction. Per-scenario scores are in [§1.3](#13-when-to-pick-which-per-scenario).
+
 ---
 
 ## 8. Observability and UI
+
+> **In short**
+> - **Temporal Web UI** is execution-centric: Workflow list, Event History views, live call stack, Query/Signal/Update/reset/terminate [S31](sources.md#s31).
+> - **Dagster UI** is asset- and run-centric: asset catalog and lineage, runs, schedules, sensors, backfills, code-location reload [S78](sources.md#s78).
+> - Temporal SDKs emit **Prometheus metrics** and **OpenTelemetry** traces [S32](sources.md#s32). Dagster OSS gives structured event logs plus pluggable compute logs [S54](sources.md#s54).
+> - **Alerts, Insights and asset health are Dagster+** [S79](sources.md#s79). Neither OSS product bundles alerting (*inference*).
 
 | Area | Temporal Web UI [S31](sources.md#s31) | Dagster UI (OSS) [S78](sources.md#s78) |
 |---|---|---|
@@ -884,11 +939,18 @@ flowchart LR
     end
 ```
 
-*Judgement:* Temporal answers "what happened inside this execution?"; Dagster answers "which data is stale and why?", which is closer to what ingestion stakeholders ask. Freshness *alerting* is Dagster+.
+**Verdict** (*judgement*): Temporal answers "what happened inside this execution?"; Dagster answers "which data is stale and why?", which is closer to what ingestion stakeholders ask. Freshness *alerting* is Dagster+.
 
 ---
 
 ## 9. Testing and developer experience
+
+> **In short**
+> - **Temporal**: time-skipping environment, full local server, `ActivityEnvironment`, mocked Activities, **replay tests in CI** [S41](sources.md#s41).
+> - **Dagster**: plain pytest (call assets directly, `build_asset_context()`, mock resources, `execute_in_process`); **asset checks** test data at runtime [S82](sources.md#s82) [S83](sources.md#s83).
+> - Local dev is one command in both (`temporal server start-dev`, `dg dev`); neither is for production [S39](sources.md#s39) [S86](sources.md#s86).
+> - Temporal adds **determinism and versioning** to every change [S44](sources.md#s44); Dagster deploys by **reloading code locations** [S78](sources.md#s78).
+> - Languages: Temporal 8 SDKs; Dagster definitions in Python, others via Pipes [S1](sources.md#s1) [S66](sources.md#s66).
 
 | Need | Temporal (Python SDK) [S41](sources.md#s41) | Dagster [S82](sources.md#s82) |
 |---|---|---|
@@ -937,13 +999,20 @@ flowchart LR
 | Strategy | Worker Versioning "strongly recommend[ed]"; patching alternative; eager start ignores versioning | Reload all or per location in UI [S78](sources.md#s78) |
 | Replay stages | Dev (checked-in histories), pre-deploy (fetched; encrypted payloads may block), deploy-time verify Worker; scrub PII | — |
 | Zero-downtime | Not covered | Not in `dg dev`; production **Not verified** [S86](sources.md#s86) |
-| Scaffolding | — | Components and the `dg` CLI scaffold projects and YAML definitions [S57](sources.md#s57) |
+| Scaffolding | — | Components and the `dg` CLI scaffold projects and YAML-based definitions [S57](sources.md#s57) |
 
-*Judgement:* no quantitative learning-curve data exists. Temporal docs stress determinism, versioning and replay (even tracing has replay quirks) [S44](sources.md#s44) [S32](sources.md#s32); Dagster frames testing as "directly invoke definitions" with pytest [S82](sources.md#s82). For a Python data team, Dagster's ramp-up is shorter; Temporal's concepts pay off for long-running, stateful pipelines.
+**Verdict** (*judgement*): no quantitative learning-curve data exists. Temporal docs stress determinism, versioning and replay (even tracing has replay quirks) [S44](sources.md#s44) [S32](sources.md#s32); Dagster frames testing as "directly invoke definitions" with pytest; its own concepts are assets, resources and IO managers [S82](sources.md#s82). For a Python data team, Dagster's ramp-up is shorter; Temporal's concepts pay off for long-running, stateful pipelines.
 
 ---
 
 ## 10. Deployment, scaling and limits
+
+> **In short**
+> - **Temporal OSS** installs: CLI dev server, Docker Compose, release binaries + systemd, embedded Go package, Helm charts [S14](sources.md#s14).
+> - **Dagster OSS** installs: local, Docker Compose, Kubernetes (`dagster/dagster` Helm chart), AWS (ECS), GCP [S88](sources.md#s88).
+> - Temporal scales through History Shards (**fixed at creation**; 1–128K run successfully) and horizontally scaled Workers [S2](sources.md#s2) [S15](sources.md#s15).
+> - Dagster scales through run launchers/executors and concurrency limits; the daemon is a **single replica** [S52](sources.md#s52) [S56](sources.md#s56).
+> - Temporal's per-execution limits (2 MB payload, 51,200 events/50 MB history, 2,000 pending ops) shape ingestion design [S11](sources.md#s11).
 
 ### 10.1 Deployment options
 
@@ -1033,11 +1102,17 @@ When a pending-operation limit is hit, the Commands fail [S11](sources.md#s11) a
 | Default sensor interval | 30 s when unset (source; API docs give none) | [S112](sources.md#s112) [S108](sources.md#s108) |
 | Run queue dequeue interval | 5 s fallback in `QueuedRunCoordinator` (source) | [S112](sources.md#s112) |
 
-*Judgement:* Temporal's limits are per *execution*, so they push you to split work into many small executions. Dagster's limits are about *control-plane throughput* (sensor time, single daemon), so keep sensors light and heavy work in runs.
+**Verdict** (*judgement*): Temporal's limits are per *execution*, so they push you to split work into many small executions. Dagster's limits are about *control-plane throughput* (sensor time, single daemon), so keep sensors light and heavy work in runs.
 
 ---
 
 ## 11. Security
+
+> **In short**
+> - Both are **insecure by default**.
+> - **Temporal OSS** has opt-in, first-party controls: mTLS, a pluggable Authorizer and JWT ClaimMapper, Web UI SSO/OIDC, client-side payload encryption via codecs [S45](sources.md#s45).
+> - **Dagster OSS** has no built-in user authentication or RBAC; a maintainer confirms these are Dagster+ only [S89](sources.md#s89).
+> - Community auth add-ons for Dagster OSS exist but are third-party and unevaluated [S91](sources.md#s91) [S92](sources.md#s92).
 
 Both are **insecure by default**. Temporal's default Authorizer "allows **every** API request, with no authentication or access control" [S45](sources.md#s45).
 
@@ -1077,11 +1152,17 @@ flowchart LR
 - Source credentials live in your Workers (Temporal) or code-location/run environment (Dagster). Secrets management was **not covered** for either.
 - Payload codecs block replay tests on fetched histories unless you can decrypt them; scrub PII from histories used in replay tests [S44](sources.md#s44).
 
-*Judgement:* for several teams sharing one OSS deployment with per-team access control, Temporal OSS is materially stronger. Dagster OSS suits a single trusted team behind a network boundary.
+**Verdict** (*judgement*): for several teams sharing one OSS deployment with per-team access control, Temporal OSS is materially stronger. Dagster OSS suits a single trusted team behind a network boundary.
 
 ---
 
 ## 12. Licensing and community
+
+> **In short**
+> - **Temporal Server: MIT**, ~23.7k stars, ~2.0k forks; latest **v1.32.1** [S48](sources.md#s48) [S49](sources.md#s49).
+> - **Dagster: Apache-2.0**, ~16.1k stars, ~2.3k forks; latest **1.13.29** on PyPI, roughly weekly-to-biweekly patches [S93](sources.md#s93) [S95](sources.md#s95).
+> - **Prefect announced it is acquiring Dagster Labs** (2026-07-13); OSS to be "actively developed", "no plans to merge Dagster into Prefect" [S96](sources.md#s96) [S97](sources.md#s97).
+> - Temporal began as a fork of Uber's Cadence by Cadence's creators [S48](sources.md#s48).
 
 | | Temporal | Dagster |
 |---|---|---|
@@ -1107,11 +1188,15 @@ flowchart LR
 | dagster.io showed a "Dagster is now part of Prefect" banner; exact close date **Not verified** | [S100](sources.md#s100) |
 | Third-party press exists, not fetched | [S98](sources.md#s98) [S99](sources.md#s99) |
 
-*Judgement:* both licences are permissive and forkable. Dagster carries **ownership-change risk** in 2026 (roadmap under Prefect not yet visible; Apache-2.0 limits the downside). Temporal carries typical **single-vendor risk**. Stars and cadence are weak signals.
+**Verdict** (*judgement*): both licences are permissive and allow forking; neither is source-available or copyleft. Dagster carries **ownership-change risk** in 2026 (roadmap under Prefect not yet visible; Apache-2.0 limits the downside). Temporal carries typical **single-vendor risk**. Stars and cadence are weak signals.
 
 ---
 
 ## 13. Using both together
+
+> **In short**
+> - **No official Temporal–Dagster integration exists** [S68](sources.md#s68); combining them is custom code.
+> - Three patterns (*inference*): Dagster outer / Temporal inner, Temporal outer / Dagster inner, or joined only by storage.
 
 **No official integration.** Dagster's integrations index lists no Temporal integration, and no first-party bridge was found [S68](sources.md#s68). Building blocks (the pattern itself is *inference*):
 
@@ -1142,7 +1227,7 @@ sequenceDiagram
 | B. Temporal outer, Dagster inner | Temporal Activity calls Dagster GraphQL to launch a materialization | Temporal is the main control plane; Dagster lineage sees only the triggered part |
 | C. Separate, joined by storage | Temporal writes to a bucket; Dagster sensor picks up new files | Loosest coupling; no cross-system status |
 
-*Judgement:* adopt both only if one tool clearly fails a hard requirement; two control planes cost real operations effort ([§10](#10-deployment-scaling-and-limits)).
+**Verdict** (*judgement*): adopt both only if one tool clearly fails a hard requirement; two control planes cost real operations effort ([§10](#10-deployment-scaling-and-limits)).
 
 ---
 
@@ -1153,11 +1238,28 @@ sequenceDiagram
 | In scope | Out of scope / contrast only |
 |---|---|
 | Temporal Server (OSS, MIT) and SDKs, self-hosted | Temporal Cloud (limits contrast only) |
-| Dagster OSS (Apache-2.0), self-hosted | Dagster+ (to show what OSS lacks) |
+| Dagster OSS (Apache-2.0), self-hosted | Dagster+ Serverless / Hybrid (to show which features are not in OSS) |
 | Batch, micro-batch, event-triggered ingestion | Stream engines, CDC tools themselves |
 | Integration libraries maintained by Dagster | Prefect roadmap after the acquisition |
 
-Audience: data and platform engineers; assumed knowledge Python, SQL, cloud storage, containers.
+Audience: data and platform engineers choosing an orchestrator for ingestion, and engineering graduates who want precise, short answers with diagrams. Assumed knowledge: Python, SQL, cloud storage, containers.
+
+**Evaluation dimensions** (each has its own section)
+
+| # | Dimension | What is measured |
+|---|---|---|
+| D1 | Philosophy and core abstraction | Unit of work; stated positioning |
+| D2 | Architecture and footprint | Services, databases, where user code runs, replicas |
+| D3 | Execution model and durability | Recovery granularity, retry defaults, timeouts, heartbeats, versioning cost |
+| D4 | Scheduling and triggers | Cron/interval, event triggers, overlap control, catch-up, backfill of schedule times |
+| D5 | Data awareness | Lineage, materializations, partitions, partition backfills, data-quality checks |
+| D6 | Ingestion fit | Connectors, scenario patterns, large payloads, idempotency, rate limiting, backfills |
+| D7 | Observability | UI focus, metrics, tracing, logs, search, alerting in OSS |
+| D8 | Testing and DX | Test tooling, local dev, deploy-change safety, languages |
+| D9 | Deployment, scaling, limits | Install paths, scaling knobs, numeric limits |
+| D10 | Security | AuthN, AuthZ/RBAC, transport and payload encryption in OSS |
+| D11 | Licensing and community | Licence, release cadence, GitHub signals, ownership risk |
+| D12 | Interoperability | Official integration; pattern for using both |
 
 **Ingestion scenarios**
 
@@ -1187,7 +1289,7 @@ Audience: data and platform engineers; assumed knowledge Python, SQL, cloud stor
 | 3 Third-party | Press, community projects, forum answers | Labelled; never sole support for a fact |
 | 4 Not fetched | URLs found by search, not read | Pointers only |
 
-- Numbers are copied exactly; no rounding. Conflicts are shown and logged in [3-evidence-and-gaps.md](3-evidence-and-gaps.md).
+- Each claim maps to a cited URL in [sources.md](sources.md). Numbers are copied exactly; no rounding. Code sketches use only API names checked against official docs or package source, and are marked illustrative. Conflicts are shown and logged in [3-evidence-and-gaps.md](3-evidence-and-gaps.md).
 - Page text was extracted with a summarisation fetch tool, so spot-check quotes before reuse. The GitHub API was blocked; GitHub numbers come from rendered HTML.
 
 ```mermaid
