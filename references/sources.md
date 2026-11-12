@@ -68,7 +68,7 @@ As of 2026-11-11. Label legend: no label = official page, fetched and used; *not
 35. **[S35]** [Observability - TypeScript SDK](https://docs.temporal.io/develop/typescript/platform/observability) — *not fetched*
 36. **[S36]** [Observability - .NET SDK](https://docs.temporal.io/develop/dotnet/platform/observability) — *not fetched*
 37. **[S37]** [Observability - Ruby SDK](https://docs.temporal.io/develop/ruby/platform/observability) — *not fetched*
-38. **[S38]** [Search Attributes](https://docs.temporal.io/search-attribute) — *not fetched*
+38. **[S38]** [Search Attributes](https://docs.temporal.io/search-attribute) — *fetched 2026-11-11 for the migration plan*
 39. **[S39]** [Temporal CLI server command reference](https://docs.temporal.io/cli/server)
 40. **[S40]** [Run a development server](https://docs.temporal.io/develop/run-a-development-server) — *not fetched*
 41. **[S41]** [Testing - Python SDK](https://docs.temporal.io/develop/python/testing-suite)
@@ -187,3 +187,32 @@ As of 2026-11-11. Label legend: no label = official page, fetched and used; *not
 115. **[S115]** [Activity Timeouts - Python SDK](https://docs.temporal.io/develop/python/activities/timeouts)
 116. **[S116]** [temporalio 1.36.0 (PyPI)](https://pypi.org/project/temporalio/1.36.0/) — *package metadata and source inspected*
 117. **[S117]** [Dagster daemon](https://dagster.io/docs/deployment/execution/dagster-daemon)
+
+### Migration plan (2026-11-11)
+
+Added for [`migration/`](../migration/README.md). Non-Temporal/Dagster pages are the tools' own official docs.
+
+118. **[S118]** [Temporal Worker Controller](https://docs.temporal.io/production-deployment/worker-deployments/kubernetes-controller)
+119. **[S119]** [KEDA Temporal scaler](https://keda.sh/docs/2.21/scalers/temporal/) — *KEDA project docs; scaler maintained by the community*
+120. **[S120]** [dbt programmatic invocations](https://docs.getdbt.com/reference/programmatic-invocations) — *dbt docs; page shows v1 and v2 notes*
+121. **[S121]** [Worker performance](https://docs.temporal.io/develop/worker-performance)
+122. **[S122]** [Meltano state backends](https://discovery.meltano.com/concepts/state_backends) — *Meltano docs*
+123. **[S123]** [Python SDK sync vs async Activities](https://docs.temporal.io/develop/python/best-practices/python-sdk-sync-vs-async)
+124. **[S124]** [Task Queue Priority and Fairness](https://docs.temporal.io/develop/task-queue-priority-fairness)
+125. **[S125]** [dagster-k8s](https://dagster.io/docs/integrations/libraries/k8s/dagster-k8s)
+126. **[S126]** [temporalio/helm-charts (README)](https://github.com/temporalio/helm-charts) — *GitHub HTML*
+127. **[S127]** [dlt state](https://dlthub.com/docs/general-usage/state) — *dlt docs*
+128. **[S128]** [Cancellation - Python SDK](https://docs.temporal.io/develop/python/workflows/cancellation)
+129. **[S129]** [Signal with Start pattern](https://docs.temporal.io/design-patterns/signal-with-start)
+130. **[S130]** [Workflow Id and Run Id](https://docs.temporal.io/workflow-execution/workflowid-runid)
+131. **[S131]** [Temporal CLI schedule command reference](https://docs.temporal.io/cli/command-reference/schedule)
+132. **[S132]** [Monitor Temporal Platform metrics](https://docs.temporal.io/self-hosted-guide/monitoring)
+133. **[S133]** [dbt retry](https://docs.getdbt.com/reference/commands/retry) — *dbt docs*
+134. **[S134]** [Temporal Python SDK sandbox](https://docs.temporal.io/develop/python/best-practices/python-sdk-sandbox)
+135. **[S135]** [Worker Versioning](https://docs.temporal.io/production-deployment/worker-deployments/worker-versioning)
+136. **[S136]** [Announcing GA for Worker Versioning and Public Preview for Upgrade on Continue-as-New](https://temporal.io/blog/ga-worker-versioning-public-preview-upgrade-on-continue-as-new) — *vendor blog, 2026-03-30*
+137. **[S137]** [dbt build](https://docs.getdbt.com/reference/commands/build) — *dbt docs*
+138. **[S138]** [Events and Event History](https://docs.temporal.io/workflow-execution/event)
+139. **[S139]** [Reset an Activity](https://docs.temporal.io/activity-operations/reset)
+140. **[S140]** [dbt node selection methods](https://docs.getdbt.com/reference/node-selection/methods) — *dbt docs*
+141. **[S141]** [dbt source command](https://docs.getdbt.com/reference/commands/source) — *dbt docs*
