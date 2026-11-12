@@ -46,7 +46,7 @@ flowchart LR
 | Next step | Platform PR to register our non-prod Namespace |
 | Top risk | Partitions and backfills: > 75 % of jobs, down to 5-minute, ~2-year backfills (POC-07) |
 | Other High risks | Per-job isolation, shared API token limits, duplicates and state under retries, dbt overlap, shared-cluster readiness |
-| Cutover unit | Dependency cluster (all sources feeding the same dbt models move together), each reversible |
+| Cutover unit | Dependency cluster (all sources feeding the same dbt models move together), each reversible; a too-big cluster can be split using a shared dbt job and exclusions ([§7.2](docs/2-migration-plan.md#72-cutover-unit-dependency-cluster)) |
 
 ## Conventions
 

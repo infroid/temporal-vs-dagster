@@ -10,7 +10,7 @@ Every claim the research could **not** confirm, every source conflict, and the v
 | **NF** | Page found but not fetched |
 | **I** | Inference only |
 
-**Biggest open items for ingestion:** an explicit official statement that External Storage works with self-hosted Temporal (and minimum versions) (TG7); a Dagster example of Sling `incremental`/`change-capture` (DG16). No official Temporal–Dagster comparison or integration exists; the only comparison found is an AI-generated forum answer [S102](sources.md#s102).
+**Biggest open items for ingestion:** an explicit official statement that External Storage works with self-hosted Temporal (and minimum versions) (TG7); a Dagster example of Sling `incremental`/`change-capture` (DG16). No official Temporal–Dagster comparison or integration was found in the searches recorded here (P1, P4); the only comparison found is an AI-generated forum answer [S102](sources.md#s102).
 
 ## Contents
 
@@ -127,7 +127,7 @@ Every claim the research could **not** confirm, every source conflict, and the v
 
 | # | Item | Source | Use |
 |---|---|---|---|
-| P1 | AI-generated answer comparing Dagster, Flyte, Temporal | [S102](sources.md#s102) | Only to show no official comparison exists |
+| P1 | AI-generated answer comparing Dagster, Flyte, Temporal | [S102](sources.md#s102) | Only to show no official comparison was found |
 | P2 | Community auth/RBAC add-ons for Dagster OSS | [S91](sources.md#s91) [S92](sources.md#s92) | Mentioned; not evaluated |
 | P3 | Press coverage of the Prefect–Dagster deal | [S98](sources.md#s98) [S99](sources.md#s99) | Not fetched; not used for facts |
 | P4 | Search for "Dagster Temporal integration" returned only third-party Dagster triggers (Kestra, Paradime, Hightouch, Airbyte) | — (no URLs recorded) | Supports "no official integration" |

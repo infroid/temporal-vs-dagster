@@ -42,7 +42,7 @@ Sections 2–13 share one layout: **In short** box → details (Temporal, Dagste
 | Category | General durable-execution engine: deterministic Workflows rebuilt by replaying an Event History; side effects in retried Activities [S1](sources.md#s1) [S5](sources.md#s5) | "An orchestration platform for the development, production, and observation of data assets" [S93](sources.md#s93) |
 | Connectors | None official found; every source and sink is your own Activity code (*inference from absence*) | First-party dlt, Sling, Airbyte, Fivetran, dbt; tables/streams become assets [S68](sources.md#s68) |
 | Data awareness | Schedules backfill *action times*, not data partitions [S10](sources.md#s10) | Materializations, lineage, partitions, partition backfills [S64](sources.md#s64) |
-| Durability | Crashed Workflow resumes where it stopped; Activity resumes from last heartbeat checkpoint [S1](sources.md#s1) [S20](sources.md#s20) | Recovers at step/asset boundaries: step retries, run retries, re-execute from failure [S58](sources.md#s58) [S59](sources.md#s59) |
+| Durability | Crashed Workflow resumes where it stopped; a retried Activity resumes from its last heartbeat checkpoint if its code reads the heartbeat details [S1](sources.md#s1) [S20](sources.md#s20) | Recovers at step/asset boundaries: step retries, run retries, re-execute from failure [S58](sources.md#s58) [S59](sources.md#s59) |
 | Hard limits | Payload errors at 2 MB; history terminates at 51,200 events or 50 MB, so data travels by reference [S11](sources.md#s11) [S12](sources.md#s12) | Mostly control-plane limits (sensor 60 s timeout, single daemon) [S62](sources.md#s62) [S52](sources.md#s52) |
 | Security in OSS | Opt-in mTLS, Authorizer/JWT ClaimMapper, UI SSO, payload codecs [S45](sources.md#s45) | No built-in auth or RBAC; Dagster+ only, per a maintainer [S89](sources.md#s89) |
 | Stewardship | MIT, Temporal Technologies [S48](sources.md#s48) | Apache-2.0; Prefect announced it is acquiring Dagster Labs (2026-07-13) [S95](sources.md#s95) [S96](sources.md#s96) |
@@ -632,7 +632,7 @@ Each pattern is *the author's synthesis of documented primitives*, not a vendor 
 | Schedule with overlap `Skip` starts a Workflow each interval [S10](sources.md#s10) | dlt asset on a schedule or `on_cron` [S70](sources.md#s70) [S60](sources.md#s60) |
 | One Activity per page, or a long Activity heartbeating the cursor [S20](sources.md#s20) | dlt manages its own state; with partitions, use concurrency limits [S70](sources.md#s70) |
 | Batch Iterator: "Processes one page of records per Workflow run and continues as new with the next page offset" [S21](sources.md#s21) | Concurrency pools protect the shared API across runs [S63](sources.md#s63) |
-| Queue-wide rate limit protects the API [S24](sources.md#s24) | |
+| Queue-wide rate limit caps Activities per second; it bounds API calls only if each Activity makes one request [S24](sources.md#s24) | |
 
 ```mermaid
 flowchart LR
@@ -776,7 +776,7 @@ flowchart TB
 
 | Mechanism | Temporal | Dagster |
 |---|---|---|
-| Global throughput cap | Task-queue rate limit (`max_task_queue_activities_per_second`), enforced by Matching "for the entire queue regardless of how many Workers"; 2 Workers × 5 = 5 [S24](sources.md#s24) | Concurrency pools protect "shared databases and APIs" [S63](sources.md#s63) |
+| Global throughput cap | Task-queue rate limit (`max_task_queue_activities_per_second`), enforced by Matching "for the entire queue regardless of how many Workers"; 2 Workers × 5 = 5 [S24](sources.md#s24) | None built in. Concurrency pools protect "shared databases and APIs" by capping in-flight steps, not requests per second; per-second API quotas need your own rate limiter [S63](sources.md#s63) (*inference* for the last part) |
 | Per-process cap | `MaxWorkerActivitiesPerSecond` (multiplies with Workers) [S24](sources.md#s24) | Run executor limits within a run [S63](sources.md#s63) |
 | Concurrency slots | `MaxConcurrentActivityExecutionSize`; "not throughput limits" [S24](sources.md#s24) | `max_concurrent_runs`; `default_op_concurrency_limit` [S63](sources.md#s63) [S53](sources.md#s53) |
 | Ordering | Task Queue Priority & Fairness GA 2026-05-05 [S50](sources.md#s50) | With pools, "Dagster+ does **not** guarantee strict FIFO" (stated for Dagster+; OSS not stated); QueuedRunCoordinator priority rules [S55](sources.md#s55) |
@@ -821,7 +821,8 @@ class IngestTables:
             marks[t] = await workflow.execute_activity(
                 copy_table, args=[t, marks[t]],
                 start_to_close_timeout=timedelta(hours=2),
-                heartbeat_timeout=timedelta(minutes=1),   # 2-3x heartbeat interval
+                heartbeat_timeout=timedelta(minutes=1),   # 2-3x heartbeat interval; one beat
+                                                  # per page, so > slowest read + merge
                 retry_policy=RetryPolicy(
                     maximum_attempts=10,
                     non_retryable_error_types=["SourceAuthError"],
@@ -851,12 +852,13 @@ def raw_file(context: dg.AssetExecutionContext) -> None:
 @dg.sensor(target=raw_file, minimum_interval_seconds=30)
 def new_files_sensor(context: dg.SensorEvaluationContext):
     since = float(context.cursor or 0)            # cursor persists between ticks
-    new = list_new_objects(since)                 # your code (e.g. boto3 listing)
+    new = list_new_objects(since)                 # your code: objects with modified >= since
     return dg.SensorResult(
         dynamic_partitions_requests=[files.build_add_request([o.key for o in new])],
-        run_requests=[dg.RunRequest(run_key=o.key, partition_key=o.key) for o in new],
+        run_requests=[dg.RunRequest(run_key=f"{o.key}@{o.modified}", partition_key=o.key)
+                      for o in new],      # new version of a key = new run
         cursor=str(max([o.modified for o in new], default=since)),
-    )   # Dagster skips any run whose run_key was used before
+    )   # Dagster skips any run whose run_key was used before, so `>=` re-lists are safe
 ```
 
 API sources: `@sensor`, `SensorResult`, `RunRequest`, `context.cursor` [S108](sources.md#s108); `DynamicPartitionsDefinition`, `build_add_request` [S109](sources.md#s109); `@asset(partitions_def=...)` [S110](sources.md#s110); `AssetExecutionContext.partition_key` [S84](sources.md#s84); run-key dedupe [S61](sources.md#s61).
@@ -1195,10 +1197,10 @@ flowchart LR
 ## 13. Using both together
 
 > **In short**
-> - **No official Temporal–Dagster integration exists** [S68](sources.md#s68); combining them is custom code.
+> - **No official Temporal–Dagster integration found**: Dagster's integrations index lists none [S68](sources.md#s68); combining them is custom code.
 > - Three patterns (*inference*): Dagster outer / Temporal inner, Temporal outer / Dagster inner, or joined only by storage.
 
-**No official integration.** Dagster's integrations index lists no Temporal integration, and no first-party bridge was found [S68](sources.md#s68). Building blocks (the pattern itself is *inference*):
+**No official integration found.** Dagster's integrations index lists no Temporal integration [S68](sources.md#s68), and the searches recorded in [evidence and gaps](3-evidence-and-gaps.md) found no first-party bridge. Building blocks (the pattern itself is *inference*):
 
 - Dagster webserver "responds to GraphQL queries" [S52](sources.md#s52).
 - Dagster Pipes runs external code that "can be triggered from Python" and reports logs and metadata back [S66](sources.md#s66).
