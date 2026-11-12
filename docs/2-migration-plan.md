@@ -214,6 +214,7 @@ flowchart TB
 > **In short**
 > - 22 capabilities in use today: **11 Known** (documented, no POC; rows 15 and 17 closed by Q21 and Q8) and **11 Unknown** (POC needed).
 > - Unknowns are where Temporal has no built-in equivalent (per-run pods, partitions, concurrency caps, alerting) or where behaviour depends on our tools (Meltano, dlt, dbt, Snowflake) or the shared cluster.
+> - [§4.1](#41-native-support-check-re-verified-2026-11-12) re-checks what Temporal OSS has natively; [§4.2](#42-options-to-get-each-missing-feature) gives options and a pick for each missing feature (partitions, backfills, lineage, freshness, alerts, caps).
 
 **Known** = documented, no POC. **Unknown** = POC needed (U-ID in [§5](#5-unknowns-register)).
 
@@ -242,14 +243,111 @@ flowchart TB
 | 21 | Code deploys without breaking runs | Worker Versioning (Pinned) + Worker Controller | **Unknown** | Needs server ≥ v1.29.1 (cluster: 1.32.2), Python SDK ≥ 1.11 [S135](sources.md#s135); GA blog does not say OSS is covered [S136](sources.md#s136) → U14 |
 | 22 | Platform (today: our Dagster Helm install) | Shared cluster, our own Namespace via platform PR, JWT token for Workers | **Unknown** | Persistence is "the only required dependency" [S3](sources.md#s3); durable MySQL confirmed (F9); HA, limits, paging open → U15 |
 
-**What Temporal will not give us (accept or build)**
+### 4.1 Native support check (re-verified 2026-11-12)
 
-| Lost capability | Replacement | Owner |
-|---|---|---|
-| Asset catalog and cross-tool lineage | dbt docs/lineage (team uses the UI only for failures, re-run, backfill) | Team |
-| Partition status grid and Launchpad | Snowflake status table + small launch/backfill CLI (POC-07, POC-09) | Team |
-| Freshness checks (almost all assets) | `dbt source freshness` on a Schedule + Slack alert (POC-08) | Team |
-| Dagster run history | Clean start; optional export of the run table to Snowflake; Dagster DB read-only until retention passes | Team |
+> **In short**
+> - Re-checked against official Temporal docs on 2026-11-12. **Partitions, partition status, lineage, asset catalog, freshness checks and alerting are not in Temporal OSS.** The docs index has no page on partitions or lineage [S144](sources.md#s144).
+> - **Backfill, Launchpad, run concurrency caps and bulk re-runs are partly native.** Temporal gives the building blocks, but not Dagster's data-aware version.
+> - Schedules, retries, re-run from a point, run history and safe deploys are native.
+
+| Dagster feature we use | In Temporal OSS? | What Temporal has | What is missing | Evidence |
+|---|---|---|---|---|
+| Cron schedules | **Yes** | Schedules: cron, overlap policy, catch-up window (default 1 year), pause | Nothing | [S10](sources.md#s10) |
+| Sensor (dbt after a job) | **Not needed** | Plain code: the ingest Workflow starts dbt or signals the coordinator | Nothing | [S129](sources.md#s129) |
+| Op retries / run retries | **Yes** | Activity Retry Policy; Workflow Retry Policy exists but is off by default and "not recommended" | Nothing | [S7](sources.md#s7) |
+| Re-run a failed run (from failure) | **Yes** | Workflow Reset to a Workflow Task event; Activity reset; "Start Workflow Like This One" in the UI | Reset points are Workflow Task events, not Dagster steps | [S138](sources.md#s138) [S139](sources.md#s139) [S31](sources.md#s31) |
+| Bulk actions on many runs | **Yes (CLI)** | `cancel`, `terminate`, `signal`, `delete` by a Visibility query (`--query`, `--rps`); batch reset only to `FirstWorkflowTask`, `LastWorkflowTask` or `BuildId`; batch jobs listed with `temporal batch` | Web UI batch actions not documented (TG26) | [S142](sources.md#s142) [S143](sources.md#s143) |
+| Launchpad (run with edited config + defaults) | **Partly** | UI Start Workflow form takes "a single JSON value"; "Start Workflow Like This One" copies only the first argument; CLI `workflow start --input` / `--input-file` | Config schema, defaults and validation in the UI. Defaults live in our input dataclass (docs "strongly encourage a single dataclass parameter") | [S31](sources.md#s31) [S142](sources.md#s142) [S157](sources.md#s157) |
+| Partitions (time, static, dynamic, multi-dimensional) | **No** | Schedules add `TemporalScheduledStartTime` (the action time) to each run; Workflow IDs can carry a partition key | Partition definitions, key generation, key validation | [S10](sources.md#s10) [S144](sources.md#s144) |
+| Partition status (missing / failed / done) | **No** | Custom Search Attributes (e.g. `partition_key`) + List Filter while the run is kept | Closed runs are deleted after the Namespace Retention Period (CLI default 3 days; any value ≥ 1 day on server ≥ 1.18 if persistence has capacity). SQL visibility: 10 Keyword attributes per Namespace; updates can lag | [S2](sources.md#s2) [S38](sources.md#s38) |
+| Backfill a partition range | **Partly** | `temporal schedule backfill` runs every action time in a range, in parallel (`AllowAll`) or in order (`BufferAll`) | Only cron-aligned time keys; one run per action time (no range per run); no static/dynamic/multi keys; no fill status | [S10](sources.md#s10) [S131](sources.md#s131) |
+| Backfill policy (`single_run`, `multi_run`) | **No** | Child Workflows, Continue-As-New | Batching logic; per Workflow: 2,000 pending children (≤ 500 recommended), 51,200 events | [S11](sources.md#s11) |
+| Run queue limit + tag concurrency limits | **Partly** | Worker slots; Task Queue rate limit; Fairness keys with a **per-key rate limit** (`fairness-key-rps-limit-default`, set with `temporal task-queue config set`) | A **concurrency** cap per key: Priority and Fairness set dispatch order, not concurrency. Fairness needs `matching.enableFairness` (platform PR) | [S24](sources.md#s24) [S124](sources.md#s124) |
+| Per-job pod with own CPU/memory | **No** | Worker pools; Worker Controller scales per Worker Deployment Version | One pod per run | [S118](sources.md#s118) |
+| Asset catalog | **No** | Workflows and Activities only | Datasets as first-class objects | [S5](sources.md#s5) [S144](sources.md#s144) |
+| Lineage graph (RAW → CLEAN → SEMANTIC) | **No** | Nothing; no OpenLineage integration found | Dataset-level lineage | [S144](sources.md#s144); OpenLineage, Dagster and Temporal searched 2026-11-12 (*absence*) |
+| Materialization metadata (row counts, last loaded) | **No** | Memo and Search Attributes describe runs, not datasets | Per-dataset history | [S38](sources.md#s38) |
+| Freshness checks | **No** | Nothing built in | Checks and thresholds | [S132](sources.md#s132) (metrics only) |
+| Slack / PagerDuty alerts | **No** | Prometheus metrics; docs recommend no specific alerts | Alert rules and per-run messages | [S132](sources.md#s132) |
+| Asset checks / dbt tests | **Not needed** | dbt runs its own tests; `dbt build` skips downstream on failure | Nothing | [S137](sources.md#s137) |
+| Run history and logs in a UI | **Yes** | Web UI with Event History; logs go to Sumo Logic | Retention-bound (see partition status) | [S31](sources.md#s31) [S2](sources.md#s2) |
+| Deploy code while runs are in flight | **Yes** (to confirm) | Worker Versioning (Pinned), server ≥ v1.29.1 | OSS coverage to confirm (U14) | [S135](sources.md#s135) |
+| `dagster-dbt`, `dagster-dlt`, `dagster-meltano` | **No** | Any code in an Activity | The integrations; we run the tools as subprocesses | [S1](sources.md#s1) |
+
+### 4.2 Options to get each missing feature
+
+> **In short**
+> - Every gap has at least one workable option. Most are **our code plus Snowflake**, not new infrastructure.
+> - **Recommended baseline** (*judgement*): partition library + Snowflake partition status table + `BackfillWorkflow` + dbt docs and Snowflake lineage + `dbt source freshness` + failure Activity and Grafana alerts.
+> - **Only if we want a real cross-tool catalog:** OpenLineage events to Marquez or OpenMetadata (new optional POC-12). Keeping Dagster as a read-only catalog is possible but keeps Dagster running.
+
+```mermaid
+flowchart LR
+  subgraph T["Temporal (execution)"]
+    SCH["Schedules"] --> IW["IngestWorkflow<br/>(source, partition batch)"]
+    BF["BackfillWorkflow"] --> IW
+    IW --> DBT["dbt Activity"]
+  end
+  subgraph OURS["Our code (Python package)"]
+    PL["Partition library<br/>(keys per source)"]
+    LC["Launch / backfill CLI"]
+  end
+  subgraph SF["Snowflake"]
+    PS[("partition_status<br/>1 row per source x partition")]
+    LIN["Snowsight lineage<br/>(Enterprise+)"]
+  end
+  PL --> SCH
+  PL --> BF
+  LC --> BF
+  IW -->|"write status, rows, run link"| PS
+  DBT --> DOCS["dbt docs site<br/>(model lineage)"]
+  PS --> FR["Freshness + gap checks<br/>(Schedule)"]
+  FR --> AL["Slack / PagerDuty"]
+  IW -. "optional (POC-12)" .-> OL["OpenLineage events<br/>to Marquez / OpenMetadata"]
+  DBT -. "optional: dbt-ol" .-> OL
+```
+
+**Options per gap.** Effort is an *estimate*; recommendations are *judgement*.
+
+| Gap | Option | How | Pros | Cons | Pick |
+|---|---|---|---|---|---|
+| **Partitions** (definitions, keys) | A. Own partition library | Python `PartitionDef` per type: time window (cron), static list, dynamic list in a Snowflake table, multi = product of two. Scheduled run turns its action time into a key | Full control; no extra service; same keys for Schedules, backfills and status | We own and test it (~3–5 days inside POC-07) | **Yes** |
+| | B. Reuse Dagster's partition classes as a library only | Import `DailyPartitionsDefinition` etc.; `get_partition_keys(current_time=…)` returns keys | Same keys as today; less code | Named dynamic partitions need a `DagsterInstance` (`dynamic_partitions_store`); ties Workers to Dagster versions | Maybe, for time and static types only (POC-07 compares with A) |
+| | C. Schedule action times only | One Schedule per source; key = `TemporalScheduledStartTime` | Zero code | Only cron-aligned time keys | For simple daily/hourly sources |
+| **Partition status** (missing / failed view) | A. Snowflake `partition_status` table | Activity writes one row per source × partition: status, run ID, rows, `loaded_at`, error | Kept for years; SQL; feeds freshness, gap checks, dashboards | Our schema and writes; must be idempotent (U04) | **Yes** |
+| | B. Temporal Visibility only | Search Attributes `partition_key`, `backfill_id` + List Filter | Native; links straight to runs | Gone after retention [S2](sources.md#s2); 10 Keyword attributes [S38](sources.md#s38); lag | Yes, for live on-call only, next to A |
+| | C. Dagster as read-only catalog | Report each load with `POST /report_asset_materialization/` (`asset_key`, `partition`, `metadata`); assets defined as external assets (`AssetSpec`) [S152](sources.md#s152) [S153](sources.md#s153) | Keeps the familiar partition grid and catalog | Keeps Dagster webserver + DB running; "Dagster can't materialize external assets directly or put them in a schedule" [S153](sources.md#s153); partitioned external assets not documented | Only if the grid is a hard need |
+| **Backfills** | A. `BackfillWorkflow` | Splits a range into batches, ≤ K children at a time, Continue-As-New every N batches; one range per child run, like Launchpad (POC-07) | Any partition type; range per run; status per partition | Our code; must respect per-Workflow limits [S11](sources.md#s11) | **Yes** |
+| | B. `temporal schedule backfill` | Replays every action time in a range [S131](sources.md#s131) | Native, no code | One run per action time; cron-aligned keys only; no status | For missed schedule times after an outage or cutover |
+| | C. Batch CLI | `temporal workflow cancel/terminate --query "backfill_id='…'"` [S142](sources.md#s142) | Stop a bad backfill in one command | Not a backfill tool itself | Use with A |
+| **Launchpad** (config + defaults) | A. Typed input + UI/CLI | One input dataclass with defaults in code [S157](sources.md#s157); start from UI form (one JSON value) or `workflow start --input-file` [S31](sources.md#s31) [S142](sources.md#s142) | Native; versioned with code | No form per field; UI copies only the first argument | **Yes** |
+| | B. Small launch CLI | `launch <source> --from … --to …` fills defaults, validates keys, starts `BackfillWorkflow` | Fast and safe for on-call | Our code (~1–2 days, POC-09) | **Yes**, with A |
+| **Concurrency caps** (run queue, tag limits) | A. Task Queue per shared token, fixed replicas × slots | Cap = replicas × slots | Native | Breaks under autoscaling (*inference*) | Fallback |
+| | B. Semaphore / mutex Workflow per key | Acquire/release by Signal or Update; official Go mutex sample [S145](sources.md#s145) | Strict cap per key; any number of keys | Our code; long-lived Workflow needs Continue-As-New | **Yes** (strict caps) |
+| | C. Fairness per-key rate limit | `fairness-key-rps-limit-default` per key [S124](sources.md#s124) | Native; fair across sources | Rate, not concurrency; needs platform PR | Add for API rate limits |
+| **Per-job resources** | A. Worker pools per resource class | One Task Queue + Deployment per size (S/M/L) | Simple; warm pods | One OOM hits the whole pod (*inference*) | **Yes** (default) |
+| | B. Activity launches a Kubernetes Job | Closest to `K8sRunLauncher`; a Job is a one-off task that "run[s] to completion and then stop[s]" [S156](sources.md#s156) | Same isolation as today | Our code: create, watch, cancel, clean up the Job | For the few heaviest jobs |
+| **Lineage + catalog** | A. dbt docs | `dbt docs generate` exports a static site [S155](sources.md#s155) | Free; already have dbt | Models only; ingestion side not shown | **Yes** (baseline) |
+| | B. Snowflake lineage | Object and column lineage for `COPY INTO`, CTAS, `INSERT … SELECT`, `MERGE`; kept 1 year; Enterprise Edition or higher [S151](sources.md#s151) | No code; covers RAW loads too | No run context; edition to confirm | **Yes**, if our edition allows |
+| | C. OpenLineage + catalog server | Activities emit START/COMPLETE events with input/output datasets (`openlineage-python`) [S146](sources.md#s146); dbt via `dbt-ol`, a "1:1 drop-in replacement" for `dbt` with Snowflake support [S147](sources.md#s147); view in Marquez (reference implementation, lineage UI) [S148](sources.md#s148) or OpenMetadata / DataHub [S149](sources.md#s149) [S150](sources.md#s150) | Cross-tool lineage with run context; open standard | One more service to run; emit code per tool | Optional (POC-12) |
+| | D. Dagster as read-only catalog | See partition status option C | Familiar UI | Keeps Dagster | Not recommended (*judgement*) |
+| **Materialization metadata** | A. Columns in `partition_status` | Rows, bytes, `max(loaded_at)`, run link | Same table as status | Our code | **Yes** |
+| | B. OpenLineage facets / Dagster REST `metadata` | Ride on lineage option C or D | Shown in a catalog UI | Needs that option | With C |
+| **Freshness checks** | A. `dbt source freshness` on a Schedule | Exits non-zero when stale [S141](sources.md#s141); alert on failure | Thresholds next to models | dbt sources only | **Yes** |
+| | B. SQL check on `partition_status` | Scheduled Activity: missing or late partitions per source | Covers non-dbt assets and partition gaps | Our code | **Yes**, with A |
+| | C. Dagster freshness policies | Opt-in preview in OSS; alerts docs are marked Dagster+ [S154](sources.md#s154) | — | Needs Dagster; external-asset support not documented | No |
+| **Alerts** | A. Failure Activity | Last step posts source, partition, error and UI link to Slack / PagerDuty | Rich context per run | Does not fire if Workers are down | **Yes** |
+| | B. Grafana alerts on metrics | Server + SDK Prometheus metrics; "configure Grafana Alerts" [S132](sources.md#s132) | Catches Workers down, backlog, missed schedules | No per-run context | **Yes**, with A |
+| **Run history** | Clean start | Optional export of the Dagster run table to Snowflake; Dagster DB read-only until retention passes | Simple | No history in the Temporal UI | **Yes** (Q25) |
+
+**What this adds to the plan**
+
+| Change | Where |
+|---|---|
+| POC-07 compares partition library option A with option B (Dagster classes) for time and static types | [POC-07](#poc-07--partitions-and-backfills-u11-u18) |
+| POC-06 adds Fairness per-key rate limit (option C) to the semaphore test, if the platform enables Fairness | [POC-06](#poc-06--shared-api-rate-limits-and-run-queue-caps-u09) |
+| Snowflake retention ≥ partition history; Namespace retention sized for on-call only (days, not years) | POC-11b, [§6.3](#63-shared-setup) |
+| New **optional POC-12**: lineage and catalog (run only if dbt docs + Snowflake lineage are not enough) | [POC-12](#poc-12--lineage-and-catalog-optional) |
 
 ---
 
@@ -330,7 +428,7 @@ quadrantChart
 > **In short**
 > - **Step 0:** POC-11a, our Namespace (platform PR) and a Worker reading its token from the provided path.
 > - **Wave A (blocking, ~6 engineer-weeks):** POC-11b, 01, 02, 03, 04, 06, 07. If any fails, revisit the decision to migrate.
-> - **Wave B (hardening, ~1.5 engineer-weeks, can overlap):** POC-08, 09, 10.
+> - **Wave B (hardening, ~1.5 engineer-weeks, can overlap):** POC-08, 09, 10. POC-12 (lineage and catalog) is optional and not in the totals.
 > - POC-07 (partitions) is the biggest risk.
 
 Each POC answers **one** question from [§5](#5-unknowns-register) and nothing already documented. 10 POCs. POC-05 (multi-source gating) was dropped: no wait-for-all rule (Q21); covered by POC-04.
@@ -381,6 +479,7 @@ flowchart LR
 | 08 | Alerting, freshness, logs | U12, U17 | B | 3 |
 | 09 | On-call tasks without the Dagster UI | U13 | B | 2 |
 | 10 | Safe deploys during long loads | U14 | B | 2–3 |
+| 12 | *Optional:* lineage and catalog beyond dbt docs + Snowflake lineage | — | B (optional) | 3 (not in totals) |
 | | **Totals** | | Step 0 ≈ 1; A ≈ **28** (3 + 5 + 4 + 2 + 4 + 3 + 7); B ≈ **8** (3 + 2 + 3) | |
 
 ### 6.3 Shared setup
@@ -461,7 +560,7 @@ flowchart LR
 |---|---|
 | Question | Can we enforce today's tag concurrency limits (e.g. "max N jobs per API token") and the global run-queue limit across all workers, even while autoscaling? |
 | Not tested | Task Queue rate limit is per second and queue-wide (documented) |
-| Setup | Input: export of the real `tag_concurrency_limits` and run-queue limit. Compare: (a) one Task Queue per shared token with fixed replicas × slots; (b) a semaphore Workflow per key (acquire/release via Update or Signal); (c) Fairness keys with `matching.enableFairness=true` (platform PR; only if granted) |
+| Setup | Input: export of the real `tag_concurrency_limits` and run-queue limit. Compare: (a) one Task Queue per shared token with fixed replicas × slots; (b) a semaphore Workflow per key (acquire/release via Update or Signal); (c) Fairness keys with `matching.enableFairness=true` (platform PR; only if granted), plus the per-key rate limit `fairness-key-rps-limit-default` for API rate limits [S124](sources.md#s124) |
 | Steps | 1. Fire 30 jobs at once with cap N=5 on one token (S-token-pair + clones). 2. Scale workers 1 → 6 during the run. 3. Kill a worker holding a permit. 4. Start one source from a Schedule and manually at once (source-wide lock, [§4](#4-feature-mapping) row 2). 5. Backfill S-part-5m while its 5-minute schedule keeps firing |
 | Pass | Concurrency per key never exceeds N · global running count never exceeds the run-queue limit · never two runs of one source at once · a killed holder's permit is released within heartbeat timeout · no source starves longer than the agreed time |
 | Fail → | Pick the option that passes every criterion (lower throughput is fine if caps hold). If none passes, token-sharing sources stay on Dagster |
@@ -473,7 +572,7 @@ flowchart LR
 |---|---|
 | Question | Can we run partitioned loads and backfills (all types, down to 5-minute, ~2-year ranges) on Temporal, track per-partition status, and keep them consistent with incremental state? |
 | Not tested | Schedule backfill of schedule times [S131](sources.md#s131); per-Workflow limits [S11](sources.md#s11) (documented) |
-| Setup | **Partition library** in Python: one `PartitionDef` per type (time window with cron, static list, dynamic list stored in Snowflake, multi-dimensional = product of two). `BackfillWorkflow(source, range, batch_size)` splits the range into **batches** (e.g. 1 day of 5-minute partitions = 288), runs at most K child `IngestWorkflow`s at a time (K under POC-06 caps, ≤ 500), and Continues-As-New every N batches. Child Workflow ID `ingest-<source>-<batch_start>-<batch_end>`. For a job that accepts only **one partition per run** (P0 inventory), the batch child runs its partitions one after another, one Activity each, so pending children stay ≤ K (*inference*). Backfill runs use **their own state ID**, never the live one. Run config: Launchpad config + defaults become one typed input dataclass, defaults in code. Status: one row per partition in a Snowflake table; Search Attributes `partition_key`/`backfill_id` per batch |
+| Setup | **Partition library** in Python ([§4.2](#42-options-to-get-each-missing-feature) option A; compare with reusing Dagster partition classes, option B, for time and static types): one `PartitionDef` per type (time window with cron, static list, dynamic list stored in Snowflake, multi-dimensional = product of two). `BackfillWorkflow(source, range, batch_size)` splits the range into **batches** (e.g. 1 day of 5-minute partitions = 288), runs at most K child `IngestWorkflow`s at a time (K under POC-06 caps, ≤ 500), and Continues-As-New every N batches. Child Workflow ID `ingest-<source>-<batch_start>-<batch_end>`. For a job that accepts only **one partition per run** (P0 inventory), the batch child runs its partitions one after another, one Activity each, so pending children stay ≤ K (*inference*). Backfill runs use **their own state ID**, never the live one. Run config: Launchpad config + defaults become one typed input dataclass, defaults in code. Status: one row per partition in a Snowflake table; Search Attributes `partition_key`/`backfill_id` per batch |
 | Steps | 1. Scheduled run of each type (S-part-5m, S-part-multi, a daily, a static, a dynamic) creates today's partition key and run config. 2. Backfill the largest real range (2 years) for S-part-5m on the cloned DB, one range per child run as in Launchpad. 3. Repeat a shorter backfill for one single-partition-only job. 4. Fail 5 batches on purpose; re-run only failed partitions. 5. Start the same batch twice. 6. Add a dynamic partition key and backfill it. 7. After a backfill of old partitions, run a live load and compare it with a clean live run over the same window. 8. Compare runtime and Snowflake cost with Dagster's range-per-run backfills. 9. Two backfills with overlapping ranges, and a backfill over partitions the live schedule also loads. 10. Make one 5-minute run last over 5 minutes so `Skip` drops the next action; run the gap check. 11. Reconcile 1 hour of missed schedule times with `temporal schedule backfill` under `--overlap-policy BufferAll`, then `AllowAll`; pick the value for cutover step 6 |
 | Pass | Every partition key loads once with correct rows (POC-02 checks) · on-call lists failed/missing partitions of a source in one query · re-run of only failed partitions works · duplicate start rejected · no Workflow exceeds 10,240 events (warn level) · 2-year backfill finishes in an agreed time without starving live schedules · after a backfill, the live bookmark equals the value from a clean live run over the same window, and the next live run loads the same rows as that clean run · overlapping ranges never load one partition concurrently; a re-load replaces rows and the status table shows the latest run · the partition skipped by `Skip` is found and loaded by the gap check · the chosen backfill overlap policy runs every missed schedule time, and the source lock still prevents two writers |
 | Fail → | Partitioned sources stay on Dagster until the library passes; this blocks most of the migration |
@@ -508,6 +607,18 @@ flowchart LR
 | Pass | v1 runs finish on v1 pods with no non-determinism error · new run uses v2 · v1 pods removed after drain · replay test of v1 histories runs in CI |
 | Fail → | Use Workflow patching (`patched()`) and replay tests instead |
 | Depends | Server ≥ v1.29.1 (1.32.2), Python SDK ≥ 1.11; Worker Controller approval (U02) |
+
+#### POC-12 — Lineage and catalog (optional)
+
+| Item | Detail |
+|---|---|
+| Question | Do we need cross-tool lineage (source → `RAW` → `CLEAN` → `SEMANTIC`) with run context, beyond dbt docs and Snowflake lineage? |
+| When | Only if the team finds [§4.2](#42-options-to-get-each-missing-feature) lineage options A + B not enough |
+| Setup | Marquez (or OpenMetadata) in a dev namespace; `openlineage-python` START/COMPLETE events from the ingest Activity with input (source) and output (`RAW` table) datasets [S146](sources.md#s146); dbt through `dbt-ol` [S147](sources.md#s147) |
+| Steps | 1. Load S-big and S-dlt. 2. Run dbt `source:<x>+`. 3. Fail one load. 4. Open lineage for one `SEMANTIC` model |
+| Pass | Lineage shows source → `RAW` → `CLEAN` → `SEMANTIC` in one graph · failed run visible on its dataset · emit failure never fails the load · run cost of the extra service agreed |
+| Fail → | Stay with dbt docs + Snowflake lineage |
+| Depends | Snowflake edition (lineage option B) |
 
 ### 6.5 Go / no-go after Wave A
 

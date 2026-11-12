@@ -594,6 +594,8 @@ flowchart LR
 
 **Verdict** (*judgement*): data awareness is Dagster's clearest advantage for ingestion that feeds analytics.
 
+Re-verified 2026-11-12, with options to rebuild each missing feature on Temporal (partition library, Snowflake status table, OpenLineage, Snowflake lineage, dbt docs): [migration plan §4.1–4.2](2-migration-plan.md#41-native-support-check-re-verified-2026-11-12).
+
 ---
 
 ## 7. Data ingestion

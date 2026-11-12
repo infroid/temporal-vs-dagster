@@ -10,7 +10,7 @@ Every `[S#]` citation in this repo resolves to one row below. Official docs and 
 | *third-party* | Not from Temporal or Dagster |
 | *package source* / *GitHub HTML scraped* | Read from the PyPI wheel or rendered GitHub page (GitHub API was blocked) |
 
-`docs.dagster.io/*` URLs redirect (HTTP 302) to `dagster.io/docs/*`. Fetched 2026-11-11 (S1–S117) and 2026-11-11/12 for the migration plan (S118–S141).
+`docs.dagster.io/*` URLs redirect (HTTP 302) to `dagster.io/docs/*`. Fetched 2026-11-11 (S1–S117) and 2026-11-11/12 for the migration plan (S118–S141). Fetched 2026-11-12 for the Dagster-feature options (S142–S157).
 
 ## Temporal
 
@@ -256,3 +256,24 @@ Every `[S#]` citation in this repo resolves to one row below. Official docs and 
 | <a id="s139"></a>S139 | [Reset an Activity](https://docs.temporal.io/activity-operations/reset) |  |
 | <a id="s140"></a>S140 | [dbt node selection methods](https://docs.getdbt.com/reference/node-selection/methods) | *dbt docs* |
 | <a id="s141"></a>S141 | [dbt source command](https://docs.getdbt.com/reference/commands/source) | *dbt docs* |
+
+### Dagster features in Temporal (2026-11-12)
+
+| # | Source | Note |
+|---|---|---|
+| <a id="s142"></a>S142 | [Temporal CLI workflow command reference](https://docs.temporal.io/cli/workflow) |  |
+| <a id="s143"></a>S143 | [Temporal CLI batch command reference](https://docs.temporal.io/cli/batch) |  |
+| <a id="s144"></a>S144 | [Temporal docs index (llms.txt)](https://docs.temporal.io/llms.txt) | *used to check absence: no page on partitions or lineage* |
+| <a id="s145"></a>S145 | [samples-go: mutex](https://pkg.go.dev/github.com/temporalio/samples-go/mutex) | *official sample repo; page shows module v1.3.0 (2021)* |
+| <a id="s146"></a>S146 | [OpenLineage Python client: usage](https://openlineage.io/docs/client/python/usage) | *OpenLineage docs* |
+| <a id="s147"></a>S147 | [OpenLineage dbt integration](https://openlineage.io/docs/integrations/dbt) | *OpenLineage docs, v1.55.0* |
+| <a id="s148"></a>S148 | [Marquez](https://marquezproject.ai/) | *project site* |
+| <a id="s149"></a>S149 | [OpenMetadata OpenLineage connector](https://docs.open-metadata.org/latest/connectors/pipeline/openlineage) | *OpenMetadata docs* |
+| <a id="s150"></a>S150 | [DataHub dbt source](https://docs.datahub.com/docs/generated/ingestion/sources/dbt) | *DataHub docs* |
+| <a id="s151"></a>S151 | [Snowflake data lineage](https://docs.snowflake.com/en/user-guide/ui-snowsight-lineage) | *Snowflake docs* |
+| <a id="s152"></a>S152 | [Dagster REST API](https://dagster.io/docs/api/rest-api) |  |
+| <a id="s153"></a>S153 | [Dagster external assets](https://dagster.io/docs/guides/build/assets/external-assets) |  |
+| <a id="s154"></a>S154 | [Dagster asset freshness policies](https://dagster.io/docs/guides/observe/asset-freshness-policies) |  |
+| <a id="s155"></a>S155 | [dbt docs command](https://docs.getdbt.com/reference/commands/cmd-docs) | *dbt docs* |
+| <a id="s156"></a>S156 | [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) | *Kubernetes docs* |
+| <a id="s157"></a>S157 | [Activity basics - Python SDK](https://docs.temporal.io/develop/python/activities/basics) |  |
