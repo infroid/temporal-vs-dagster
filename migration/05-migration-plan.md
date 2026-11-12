@@ -11,7 +11,7 @@
 
 ```mermaid
 flowchart LR
-  P0["P0 Namespace PR<br/>F9–F11<br/>(1 wk + platform lead time)"] --> P1["P1 POCs<br/>Wave A → go/no-go<br/>Wave B<br/>(6–8 wks)"]
+  P0["P0 Namespace PR<br/>F9<br/>(1 wk + platform lead time)"] --> P1["P1 POCs<br/>Wave A → go/no-go<br/>Wave B<br/>(6–8 wks)"]
   P1 --> P2["P2 Foundation<br/>prod platform, libraries,<br/>alerts, runbooks<br/>(3–4 wks)"]
   P2 --> P3["P3 Pilot<br/>1 cluster, 2–3 sources<br/>(2 wks)"]
   P3 --> P4["P4 Waves<br/>remaining clusters<br/>(~10 sources / wk)"]
@@ -20,7 +20,7 @@ flowchart LR
 
 | Phase | Output | Exit criteria |
 |---|---|---|
-| P0 Answers | Q1–Q25 and F1–F8 answered (done 2026-11-12); F9–F11 answered; Namespace PR merged; export of Dagster tag concurrency limits, freshness checks, partition definitions and Launchpad defaults; list of non-ELT ops jobs | POC scope frozen; POC-11a Namespace available |
+| P0 Answers | Q1–Q25 and F1–F8 answered (done 2026-11-12); F9 answered (F10, F11 done); Namespace PR merged; export of Dagster tag concurrency limits, freshness checks, partition definitions and Launchpad defaults; list of non-ELT ops jobs | POC scope frozen; POC-11a Namespace available |
 | P1 POCs | `migration/poc-results/POC-xx.md` per POC | Wave A all pass (see go/no-go in [04](04-poc-plan.md)); Wave B pass or risk accepted in writing |
 | P2 Foundation | Prod Namespace on the shared cluster (POC-11b agreements); worker images; shared library: `IngestWorkflow`, `BackfillWorkflow`, `run_elt` Activity, dbt trigger (POC-04 option); concurrency control (POC-06); Search Attributes; Slack/PagerDuty alerts and freshness checks; replay tests in CI; runbook | Failure drills pass; runbook reviewed by on-call |
 | P3 Pilot | 1 dependency cluster on Temporal | 2 weeks with no duplicates, no missed runs, freshness ≤ today |

@@ -94,9 +94,9 @@ Shared-cluster facts come from the team's review of the **internal platform repo
 
 | F | Question | Changes |
 |---|---|---|
-| F9 | Platform team: is the **default persistence store** (not just visibility) on a durable managed DB in every environment we will use? | Closes U15 blocker |
-| F10 | Which token issuer will our Workers use, and how are tokens rotated for long-running Worker pods? | POC-11a |
-| F11 | Which Dagster backfill strategy do partitioned jobs use: one run per partition, or one run for a range? | POC-07 batching |
+| F9 | Platform team: is the **default persistence store** (not just visibility) on a durable managed DB in every environment we will use? Check `persistence.defaultStore` and its entry under `persistence.datastores` in the server config | **Open.** Closes U15 blocker. Why it matters: the default store holds tasks, mutable Workflow state, the append-only event history and Namespace metadata; visibility only enables "show all running Workflow Executions" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). Losing the default store loses running Workflows; losing visibility loses search |
+| F10 | Worker token | **Answered:** another team manages it; each pod gets a working token at a fixed file path. POC-11a only checks that a long-lived Worker keeps working when the file's token changes |
+| F11 | Backfill strategy | **Answered:** depends on the job; backfills usually run **several partitions per run**, and Launchpad lets the user pick a date range. Matches POC-07's batch design: one `IngestWorkflow` per range |
 
 ## Sources
 

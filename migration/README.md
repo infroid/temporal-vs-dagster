@@ -5,7 +5,7 @@
 > - It separates what is **already verified** (no POC needed) from what is **unknown** (POC needed). Each unknown maps to one POC with pass/fail criteria.
 > - **Top risk:** partitions and backfills: > 75 % of jobs, every partition type down to 5-minute, backfills of ~2 years. Then per-job resource isolation, shared API rate limits, and ELT state/duplicates under retries.
 > - **Shared cluster:** server 1.32.2 with SQL visibility on MySQL 8; Namespace, dynamic config and Search Attributes need platform PRs. Durable persistence still to confirm (F9).
-> - The team answered Q1–Q25 and F1–F8 on 2026-11-12. Open follow-ups **F9–F11** are in [01](01-current-state-and-questions.md).
+> - The team answered Q1–Q25 and F1–F8 on 2026-11-12. F10–F11 answered; **F9** (default persistence store) is open, see [01](01-current-state-and-questions.md).
 
 As of 2026-11-12. Builds on the comparison in [`docs/`](../docs/) and [`comparison-matrix.md`](../comparison-matrix.md). Sources use the same numbering as [`references/sources.md`](../references/sources.md) (S118 onward were added for this plan).
 
