@@ -2,7 +2,7 @@
 
 > **Key takeaways**
 > - Six phases: answers → POCs → foundation → pilot → waves → decommission. No source moves before Wave A POCs pass.
-> - **Critical path starts outside our team:** our Namespace and Worker token on the shared cluster come by platform PR. Durable persistence is confirmed (F9). Start both in P0.
+> - **Critical path starts outside our team:** our Namespace on the shared cluster comes by platform PR; start it in P0. Durable persistence (F9) and the Worker token (F10) are already provided.
 > - Move sources in **dependency clusters**: all sources that feed the same dbt model move together, so only one orchestrator ever runs dbt on a given model.
 > - Each source cutover is reversible: pause the Temporal Schedule, re-enable the Dagster schedule. Incremental state stays in the same backend, so no reload is needed (if POC-03 passes).
 > - Timeline numbers are **estimates**, not facts.
