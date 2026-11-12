@@ -22,6 +22,7 @@ Every claim the research could **not** confirm, every source conflict, and the v
 6. [Open questions for a spike](#6-open-questions-for-a-spike)
 7. [Verification log (2026-11-11)](#7-verification-log-2026-11-11)
 8. [Verification log (2026-11-12): Dagster features in Temporal](#8-verification-log-2026-11-12-dagster-features-in-temporal)
+9. [Verification log (2026-11-12): effort estimates](#9-verification-log-2026-11-12-effort-estimates)
 
 ## 1. Research-method caveats
 
@@ -232,3 +233,16 @@ Migration-specific unknowns live in the [unknowns register](2-migration-plan.md#
 | Snowflake lineage: Enterprise+, COPY/CTAS/INSERT…SELECT/MERGE, 1 year | [S151](sources.md#s151) | Confirmed |
 | `dbt-ol` drop-in for `dbt`, Snowflake supported | [S147](sources.md#s147) | Confirmed |
 | Kubernetes Job definition | [S156](sources.md#s156) | Confirmed (one line only; other Job fields not checked) |
+
+## 9. Verification log (2026-11-12): effort estimates
+
+The effort numbers in [§8 of the plan](2-migration-plan.md#8-effort-and-timeline-estimates) are **estimates** and the LLM factors are **judgement**. Only the study results below were checked.
+
+| Claim | Pages | Result |
+|---|---|---|
+| Copilot group "completed the task 55.8% faster" (HTTP server in JavaScript) | [S158](sources.md#s158) | Confirmed in abstract; sample size not in abstract |
+| 96 Google engineers; effect ~21 %; "our confidence interval is large" | [S159](sources.md#s159) | Confirmed in abstract |
+| 16 experienced developers, 246 issues; 19 % slower with AI; developers believed ~20 % faster | [S160](sources.md#s160) | Confirmed. METR itself now marks the result out of date |
+| Late-2025 data unreliable (selection effects); METR believes developers "are more sped up from AI tools now"; "only very weak evidence" | [S161](sources.md#s161) | Confirmed (**3P**). Late-2025 point estimates not used: sign convention unclear in the fetched text |
+| AI adoption: est. −1.5 % delivery throughput, −7.2 % delivery stability | [S162](sources.md#s162) | Confirmed (vendor blog summarising the report) |
+| These results transfer to data-pipeline migrations | — | **I** (inference): no study of this kind of work was found |
