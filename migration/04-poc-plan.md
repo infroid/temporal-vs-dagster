@@ -2,7 +2,7 @@
 
 > **Key takeaways**
 > - Re-scoped on 2026-11-12 with the team's answers and follow-ups F1–F8 ([01](01-current-state-and-questions.md) §5). 10 POCs. Each answers **one** question from the [unknowns register](03-unknowns-register.md) and nothing already documented.
-> - **Step 0 (prerequisite):** POC-11a, our own Namespace on the shared cluster (platform PR), a Worker token, and confirmation that persistence is durable (F9).
+> - **Step 0 (prerequisite):** POC-11a, our own Namespace on the shared cluster (platform PR) and a Worker reading its token from the provided path. Persistence is confirmed durable (F9).
 > - **POC-07 (partitions) is the biggest risk:** 5-minute partitions and ~2-year backfills mean partitions must be **batched** per Workflow.
 > - **Wave A (blocking, ~6 engineer-weeks):** POC-01 resources, POC-02 ELT in an Activity, POC-03 state continuity, POC-04 dbt coordinator, POC-06 shared rate limits, POC-07 partitions & backfills, POC-11b shared-cluster readiness. If any fails, revisit the decision to migrate.
 > - **Wave B (hardening, ~1.5 engineer-weeks, can overlap):** POC-08 alerting + freshness + logs, POC-09 on-call tasks, POC-10 safe deploys.
@@ -61,10 +61,10 @@ flowchart LR
 |---|---|
 | Question | Can the company's shared Temporal cluster run our production loads safely, and what must the platform team add first? |
 | Not tested | That Temporal needs a persistence DB and which versions are supported (documented, [Persistence](https://docs.temporal.io/temporal-service/persistence)) |
-| 11a (prerequisite) | 1. PR to the platform values files that registers our non-prod Namespace and token issuer (F1). 2. Worker reads the token from the file path provided by the managing team (F10); check it keeps working after the token in the file changes. 3. Platform team confirms the **default persistence store** is a durable managed DB (F9). Check: start a Workflow, restart every server pod, the Workflow is still there |
+| 11a (prerequisite) | 1. PR to the platform values files that registers our non-prod Namespace and token issuer (F1). 2. Worker reads the token from the file path provided by the managing team (F10); check it keeps working after the token in the file changes. 3. Persistence: default store is managed durable MySQL (F9, confirmed). Check: start a Workflow, restart every server pod, the Workflow is still there |
 | 11b steps | 1. Record shard count and Namespace retention. 2. Register our Search Attributes (admin CLI). 3. If POC-06 needs it: PR for `matching.enableFairness` scoped to our Namespace (dynamic config is cluster-wide by default, F2). 4. Kill each server service pod while 10 POC Workflows run; ask the platform team to fail over the DB. 5. Load test: 50 concurrent ingests + the POC-07 backfill burst; watch our latency while another tenant is busy (noisy neighbour), and theirs while ours runs. 6. Agree backup/restore, upgrade and paging with the platform team |
 | Pass | No Workflow lost or stuck after each failure · Worker token refresh works for 24 h without restart · our Search Attributes are registered · Namespace rate limits do not throttle our peak load · our backfill burst does not slow other tenants · written ownership: who is paged when the cluster is down |
-| Fail → | Persistence not durable: blocker until fixed. Config or limits missing: list them as platform asks with dates; Wave A continues on a dev install |
+| Fail → | Config or limits missing: list them as platform asks with dates; Wave A continues on a dev install |
 | Effort | 1 day (11a) + 3 days (11b) |
 | Depends | Q2, F1, F2, F9, F10 |
 
@@ -185,7 +185,6 @@ flowchart LR
 | Result | Decision |
 |---|---|
 | All Wave A POCs pass | Proceed to Wave B and build ([05](05-migration-plan.md)) |
-| Default persistence not durable (POC-11a, F9) | **Stop.** Nothing can start until it is |
 | POC-11b finds missing version/config/limits | Proceed only with dated platform commitments |
 | POC-01 fails both patterns | Stop; per-job isolation is a hard requirement |
 | POC-07 fails | Stop for partitioned jobs (> 75 %); migrating only the rest is not worth a second orchestrator |

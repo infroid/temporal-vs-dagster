@@ -3,7 +3,7 @@
 > **Key takeaways**
 > - The team answered Q1–Q25 on 2026-11-12. The working assumptions (A1–A12) of the first draft are replaced by these answers.
 > - Four answers change the plan most: **(1)** Temporal is a **shared company cluster**; **(2)** **>75 % of jobs use partitions and backfills**; **(3)** many jobs **share API rate limits/tokens**; **(4)** dbt builds **all downstream models per source, with no wait-for-all-sources rule**.
-> - **Update 2026-11-12 (section 5):** the shared cluster's config shows server **1.32.2** with **MySQL 8 visibility** on a managed database, so the "no persistent DB" blocker is **likely resolved**; confirm with the platform team. Namespaces, dynamic config and Search Attributes are **not self-service** (platform PR or admin CLI).
+> - **Update 2026-11-12 (section 5):** the shared cluster's config shows server **1.32.2** with **MySQL 8 visibility** on a managed database, and the team confirmed the default persistence store is also on managed durable MySQL (F9), so the "no persistent DB" blocker is **closed**. Namespaces, dynamic config and Search Attributes are **not self-service** (platform PR or admin CLI).
 > - F3–F8 answered: **every partition type** is used (down to **5-minute**), backfills cover **about 2 years**, partitions reach the job through **Launchpad run config** with defaults, freshness checks cover **almost all assets** (Slack on failure), and some **non-ELT ops jobs** exist.
 
 ## 1. Confirmed setup (today, Dagster)
@@ -37,7 +37,7 @@ How `K8sRunLauncher` per-job config works: it accepts `container_config`, `pod_s
 | Area | Fact (from the team) | Impact |
 |---|---|---|
 | Cluster | **One company-wide Temporal on Kubernetes**, meant to replace all orchestrators | We are a tenant, not the operator. Platform POC becomes a readiness check of the shared cluster (POC-11) |
-| Persistence | Q2: "no persistent DB"; RDS can be requested. **Update (§5):** cluster config shows a managed MySQL 8 database for visibility, separate from "the default persistence store" | **Likely resolved, confirm (F9).** Was a blocker: "A Temporal Service's only required dependency for basic operation is the Persistence database"; supported: PostgreSQL 13.18/14.15/15.10/16.6, MySQL 5.7/8.0 (8.0.19+), Cassandra; SQLite "meant only for development and testing, not production usage" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). See U15 |
+| Persistence | Q2: "no persistent DB"; RDS can be requested. **Update (§5):** cluster config shows a managed MySQL 8 database for visibility, separate from "the default persistence store" | **Closed (F9):** default store is also managed durable MySQL. Was a blocker: "A Temporal Service's only required dependency for basic operation is the Persistence database"; supported: PostgreSQL 13.18/14.15/15.10/16.6, MySQL 5.7/8.0 (8.0.19+), Cassandra; SQLite "meant only for development and testing, not production usage" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). See U15 |
 | Languages | Python now; maybe others later | Temporal has 8 SDKs ([Understanding Temporal](https://docs.temporal.io/evaluate/understanding-temporal)) |
 | Side by side | Allowed | Cutover by cluster with rollback ([05](05-migration-plan.md)) |
 | Auth | No SSO/RBAC needed for our UI use | Dropped from POC-11. **But** the shared cluster has a custom JWT authorizer (§5): our Workers need an allowed token issuer |
@@ -94,7 +94,7 @@ Shared-cluster facts come from the team's review of the **internal platform repo
 
 | F | Question | Changes |
 |---|---|---|
-| F9 | Platform team: is the **default persistence store** (not just visibility) on a durable managed DB in every environment we will use? Check `persistence.defaultStore` and its entry under `persistence.datastores` in the server config | **Open.** Closes U15 blocker. Why it matters: the default store holds tasks, mutable Workflow state, the append-only event history and Namespace metadata; visibility only enables "show all running Workflow Executions" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). Losing the default store loses running Workflows; losing visibility loses search |
+| F9 | Is the **default persistence store** (not just visibility) on a durable managed DB? | **Answered 2026-11-12: yes**, the same kind of managed durable MySQL as visibility. U15 blocker closed. Why it matters: the default store holds tasks, mutable Workflow state, the append-only event history and Namespace metadata; visibility only enables "show all running Workflow Executions" ([Persistence](https://docs.temporal.io/temporal-service/persistence)). Losing the default store loses running Workflows; losing visibility loses search |
 | F10 | Worker token | **Answered:** another team manages it; each pod gets a working token at a fixed file path. POC-11a only checks that a long-lived Worker keeps working when the file's token changes |
 | F11 | Backfill strategy | **Answered:** depends on the job; backfills usually run **several partitions per run**, and Launchpad lets the user pick a date range. Matches POC-07's batch design: one `IngestWorkflow` per range |
 
