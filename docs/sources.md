@@ -10,7 +10,7 @@ Every `[S#]` citation in this repo resolves to one row below. Official docs and 
 | *third-party* | Not from Temporal or Dagster |
 | *package source* / *GitHub HTML scraped* | Read from the PyPI wheel or rendered GitHub page (GitHub API was blocked) |
 
-`docs.dagster.io/*` URLs redirect (HTTP 302) to `dagster.io/docs/*`. Fetched 2026-11-11 (S1–S117) and 2026-11-11/12 for the migration plan (S118–S141). Fetched 2026-11-12 for the Dagster-feature options (S142–S157).
+`docs.dagster.io/*` URLs redirect (HTTP 302) to `dagster.io/docs/*`. Fetched 2026-11-11 (S1–S117) and 2026-11-11/12 for the migration plan (S118–S141). Fetched 2026-11-12 for the Dagster-feature options (S142–S157) and the effort estimates (S158–S162).
 
 ## Temporal
 
@@ -277,3 +277,13 @@ Every `[S#]` citation in this repo resolves to one row below. Official docs and 
 | <a id="s155"></a>S155 | [dbt docs command](https://docs.getdbt.com/reference/commands/cmd-docs) | *dbt docs* |
 | <a id="s156"></a>S156 | [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) | *Kubernetes docs* |
 | <a id="s157"></a>S157 | [Activity basics - Python SDK](https://docs.temporal.io/develop/python/activities/basics) |  |
+
+### Effort estimates: LLM-assisted coding (2026-11-12)
+
+| # | Source | Note |
+|---|---|---|
+| <a id="s158"></a>S158 | [The Impact of AI on Developer Productivity: Evidence from GitHub Copilot](https://arxiv.org/abs/2302.06590) | *third-party, research paper (2023); abstract read* |
+| <a id="s159"></a>S159 | [How much does AI impact development speed? An enterprise-based randomized controlled trial](https://arxiv.org/abs/2410.12944) | *third-party, research paper (Google, 2024); abstract read* |
+| <a id="s160"></a>S160 | [Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity](https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/) | *third-party, research blog (METR, 2025-07-10)* |
+| <a id="s161"></a>S161 | [We are Changing our Developer Productivity Experiment Design](https://metr.org/blog/2026-02-24-uplift-update/) | *third-party, research blog (METR, 2026-02-24)* |
+| <a id="s162"></a>S162 | [Announcing the 2024 DORA report](https://cloud.google.com/blog/products/devops-sre/announcing-the-2024-dora-report) | *vendor blog (Google Cloud, 2024)* |

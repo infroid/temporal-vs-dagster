@@ -10,7 +10,7 @@ Plan to move ~50 ingestion jobs (Meltano or dlt → Snowflake `RAW`, then dbt �
 | Then | Per-job resource isolation (U01), shared API rate limits (U09), ELT state and duplicates under retries (U04, U05) |
 | Builds on | [1-comparison.md](1-comparison.md). Citations `[S#]` link to [sources.md](sources.md) |
 | Method | Separates what is **already verified** (Known, no POC) from what is **unknown**. Each unknown maps to one POC with pass/fail criteria |
-| Estimates | Effort and timeline numbers are **estimates** for one engineer, not facts. Risk ratings are **judgement** |
+| Effort | **Target (aggressive, LLM-assisted):** ~115 engineer-days; last cutover ≈ 23 weeks, Dagster off ≈ 27 weeks, for one person working alone. Risk band: ≈ 27–32 weeks to last cutover. POC phase: go / no-go at week ≈ 5.6 ([§6.0](#60-poc-phase-at-a-glance), [§8](#8-effort-and-timeline-estimates)). All effort and timeline numbers are **estimates**, not facts. Risk ratings are **judgement** |
 
 **Status labels used below**
 
@@ -23,7 +23,7 @@ Plan to move ~50 ingestion jobs (Meltano or dlt → Snowflake `RAW`, then dbt �
 
 ## Contents
 
-The plan reads top to bottom as one chain: **facts → design → mapping → unknowns → POCs → cutover**. Every section opens with an **In short** box.
+The plan reads top to bottom as one chain: **facts → design → mapping → unknowns → POCs → cutover → estimates**. Every section opens with an **In short** box.
 
 
 1. [Big picture](#1-big-picture)
@@ -33,6 +33,7 @@ The plan reads top to bottom as one chain: **facts → design → mapping → un
 5. [Unknowns register](#5-unknowns-register)
 6. [POC plan](#6-poc-plan)
 7. [Migration plan](#7-migration-plan)
+8. [Effort and timeline estimates](#8-effort-and-timeline-estimates)
 
 ---
 
@@ -60,13 +61,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  S0["Step 0<br/>Namespace PR<br/>POC-11a"] --> WA["Wave A POCs<br/>~28 eng-days<br/>go / no-go"]
-  WA --> WB["Wave B POCs<br/>~8 eng-days"]
-  WB --> F["Foundation<br/>3–4 wks"]
+  S0["Step 0<br/>Namespace PR<br/>POC-11a"] --> WA["Wave A POCs<br/>~19 eng-days<br/>go / no-go wk ~5.6"]
+  WA --> WB["Wave B POCs<br/>~5 eng-days"]
+  WB --> F["Foundation<br/>~3 wks"]
   F --> P["Pilot<br/>1 cluster, 2 wks"]
-  P --> W["Waves<br/>~10 sources / wk"]
-  W --> D["Decommission<br/>Dagster off"]
+  P --> W["Waves<br/>~4.2 sources / wk"]
+  W --> D["Last cutover wk ~23<br/>Dagster off wk ~27"]
 ```
+
+Durations: aggressive target, LLM-assisted, one person working alone, full-time ([§8](#8-effort-and-timeline-estimates)).
 
 ---
 
@@ -354,7 +357,7 @@ flowchart LR
 ## 5. Unknowns register
 
 > **In short**
-> - 16 open unknowns, 4 closed. **Top risk: U11** (partitions and backfills; ≈ 210,240 five-minute partitions over 2 years, so batching is required).
+> - 18 open unknowns, 4 closed (U19, U20 added 2026-11-13 as blocker gaps). **Top risk: U11** (partitions and backfills; ≈ 210,240 five-minute partitions over 2 years, so batching is required).
 > - High risks must pass before any cutover.
 
 ```mermaid
@@ -382,12 +385,14 @@ quadrantChart
   U18: [0.5, 0.5]
   U16: [0.2, 0.4]
   U17: [0.3, 0.3]
+  U19: [0.4, 0.85]
+  U20: [0.35, 0.5]
 ```
 
 | Risk | Unknowns |
 |---|---|
-| **High** (must pass before any cutover) | U11, U15, U01, U09, U04, U05, U06 |
-| Medium | U12, U03, U13, U02, U08, U18 |
+| **High** (must pass before any cutover) | U11, U15, U01, U09, U04, U05, U06, U19 |
+| Medium | U12, U03, U13, U02, U08, U18, U20 |
 | Low | U14, U16, U17 |
 | Closed | U07, U10, SSO/RBAC |
 
@@ -411,6 +416,8 @@ quadrantChart
 | **U14** | Can we deploy while multi-hour loads run? | Pinned Workflows finish on one version; server ≥ v1.29.1, Python SDK ≥ 1.11 [S135](sources.md#s135); GA blog does not say OSS is covered [S136](sources.md#s136) | Version is fine (1.32.2). Open: Worker Controller approval (U02); whether the custom authorizer allows the versioning APIs | Low | POC-10 | F1 |
 | **U16** | Do shared worker pods weaken secret isolation? | Today: one image, secrets as env vars (Q15). No Temporal doc on per-Activity secrets (*inference*) | Likely same exposure as today; confirm the POC-01 pattern does not widen it | Low | POC-01 | Q15 |
 | **U17** | Do logs reach Sumo Logic with source and run IDs, without replay duplicates? | `workflow.logger` and SDK logging [S32](sources.md#s32); replay de-duplication not verified ([gaps TG23](3-evidence-and-gaps.md#3-temporal-gaps)) | Log fields and duplicates on replay | Low | POC-08 | Q23 |
+| **U19** | Can worker pods reach every source, the Meltano state backend and Snowflake, with the network allowlists and secrets that work for Dagster today? | Temporal runs our code only in our Workers [S1](sources.md#s1); nothing in Temporal docs covers our network | Sources (APIs, DBs, CDC, SFTP) may allow only today's egress IPs; new pods need the same secrets path (*inference*). A vendor allowlist change can take weeks | **High** | POC-11a | Q15, Q17 |
+| **U20** | Do `temporalio`, dlt, dbt Core and Meltano fit in one worker image? | Today dbt shares Dagster's virtualenv (§2.1) | Version clashes in shared dependencies are possible (*inference*); Meltano plugins have their own virtualenvs | Medium | POC-02 | Q16, Q19 |
 
 ### 5.2 Closed
 
@@ -427,11 +434,78 @@ quadrantChart
 
 > **In short**
 > - **Step 0:** POC-11a, our Namespace (platform PR) and a Worker reading its token from the provided path.
-> - **Wave A (blocking, ~6 engineer-weeks):** POC-11b, 01, 02, 03, 04, 06, 07. If any fails, revisit the decision to migrate.
-> - **Wave B (hardening, ~1.5 engineer-weeks, can overlap):** POC-08, 09, 10. POC-12 (lineage and catalog) is optional and not in the totals.
+> - **Wave A (blocking; ~19 engineer-days aggressive, ~23 expected):** POC-11b, 01, 02, 03, 04, 06, 07. If any fails, revisit the decision to migrate.
+> - **Wave B (hardening; ~5 engineer-days aggressive, ~6 expected):** POC-08, 09, 10. POC-12 (lineage and catalog) is optional and not in the totals.
 > - POC-07 (partitions) is the biggest risk.
+> - **Plan and estimate at a glance:** [§6.0](#60-poc-phase-at-a-glance), one row per blocker; go / no-go at week ≈ 5.6 (aggressive), all POCs done by week ≈ 6.6.
 
 Each POC answers **one** question from [§5](#5-unknowns-register) and nothing already documented. 10 POCs. POC-05 (multi-source gating) was dropped: no wait-for-all rule (Q21); covered by POC-04.
+
+### 6.0 POC phase at a glance
+
+**Goal:** prove before any source moves that nothing blocks the migration. Every High risk in [§5](#5-unknowns-register) has a POC with pass/fail criteria; a failed Wave A POC either stops the migration for the affected jobs or adds a known fix with a cost ([§6.5](#65-go--no-go-after-wave-a), [§8.7](#87-what-changes-the-estimate)).
+
+| | Aggressive target | Expected | No LLM |
+|---|---|---|---|
+| P0 prepare (inventory, clusters, POC setup, Temporal ramp-up) | 7.6 ED | 9.1 ED | 12.0 ED |
+| Wave A POCs (incl. 11a) | 20.3 ED | 24.1 ED | 29.0 ED |
+| Wave B POCs | 5.2 ED | 6.1 ED | 7.5 ED |
+| **Go / no-go decision** | **week 5.6** | week 6.6 | week 8.2 |
+| POC phase done | week 6.6 | week 7.9 | week 9.7 |
+
+One person, full-time, items in sequence. Weeks count from the Namespace PR. ED = focused engineer-day; method and factors in [§8](#8-effort-and-timeline-estimates). POCs start on a dev Temporal install (§6.3) while the Namespace PR is in review, so platform lead time (≤ 2 wks assumed) is not on the critical path.
+
+| Wave | POC | Blocker it rules out | Unknowns | Baseline ED | Expected ED | Aggressive ED | Weeks (aggressive) | If it fails |
+|---|---|---|---|---|---|---|---|---|
+| A | POC-02 | Meltano/dlt in an Activity stops cleanly and retries without duplicates; one worker image holds `temporalio`, dlt, dbt and Meltano | U03, U04, U18, U20 | 4 | 3.2 | **2.6** | 1.5–2.0 | Per source: change write disposition; split images if versions clash |
+| A | POC-11a | Our Namespace, Worker auth, durable persistence, and worker pods reaching every source and Snowflake | U15, U19 | 1.5 | 1.4 | **1.2** | 2.0–2.3 | Fix with platform/network team before any POC result counts; POCs continue on the dev install |
+| A | POC-03 | Temporal runs continue from Dagster-era bookmarks; no two writers | U05 | 2 | 1.8 | **1.5** | 2.3–2.6 | Per source: one-time state copy or controlled re-sync |
+| A | POC-01 | Per-job CPU/memory and secret isolation without a per-run pod | U01, U02, U16 | 4.5 | 3.8 | **3.2** | 2.6–3.2 | **Stop** if both patterns fail |
+| A | POC-06 | Shared API token caps and run-queue limit hold, even while autoscaling | U09 | 3 | 2.4 | **2.0** | 3.2–3.6 | **Stop** for token-sharing sources (stay on Dagster) |
+| A | POC-04 | Overlapping dbt runs stay correct; freshness ≥ today | U06, U08 | 4 | 3.3 | **2.7** | 3.6–4.2 | Agreed simpler dbt schedule + written freshness trade-off |
+| A | POC-07 | Partitions (all types, 5-minute) and 2-year backfills work, with per-partition status | U11, U18 | 7 | 5.6 | **4.6** | 4.2–5.1 | **Stop** for partitioned jobs (> 75 %) |
+| A | POC-11b | Shared cluster survives failures and our backfill burst; paging owner agreed | U15 | 3 | 2.8 | **2.5** | 5.1–5.6 | Proceed only with dated platform commitments |
+| B | POC-08 | Slack/PagerDuty alerts, freshness checks and Sumo Logic logs match today | U12, U17 | 3 | 2.4 | **2.0** | 5.6–6.0 | Fix before P2 exit |
+| B | POC-09 | On-call can find, re-run and backfill in ≤ 2 min each | U13 | 2 | 1.7 | **1.4** | 6.0–6.3 | More CLI/runbook work in F7 |
+| B | POC-10 | Deploys during multi-hour loads are safe | U14 | 2.5 | 2.1 | **1.8** | 6.3–6.6 | Use `patched()` + replay tests |
+| opt | POC-12 | Lineage needs beyond dbt docs + Snowflake lineage (not a blocker) | — | 3 | 2.5 | 2.1 | only if needed | Stay with dbt docs + Snowflake lineage |
+
+Order: 02 first (needs only the dev install), 11a as soon as the Namespace exists, then 03, 01, 06, 04, 07 (needs 03 and 06), and 11b last so its load test can reuse the POC-07 backfill burst.
+
+```mermaid
+gantt
+  title POC phase, aggressive target, one person (start date notional)
+  dateFormat YYYY-MM-DD
+  axisFormat %d %b
+  section Prepare
+  P0 prepare + ramp-up :p0, 2027-01-04, 11d
+  Namespace PR review  :ns, 2027-01-04, 14d
+  section POCs
+  POC-02              :g02, after p0, 4d
+  POC-11a              :g11a, after g02, 2d
+  POC-03              :g03, after g11a, 2d
+  POC-01              :g01, after g03, 4d
+  POC-06              :g06, after g01, 3d
+  POC-04              :g04, after g06, 4d
+  POC-07              :g07, after g04, 6d
+  POC-11b              :g11b, after g07, 4d
+  Go / no-go          :milestone, gate, after g11b, 0d
+  POC-08              :g08, after g11b, 3d
+  POC-09              :g09, after g08, 2d
+  POC-10              :g10, after g09, 2d
+```
+
+**Not a blocker, so no POC:** the 11 Known rows in [§4](#4-feature-mapping) (schedules, retries, timeouts, payload limits, tests, metrics, `source:<x>+`, skip on test failure) are documented and cited.
+
+**Blockers outside our control** and their fallbacks
+
+| Dependency | Needed by | Fallback if late or refused |
+|---|---|---|
+| Namespace PR + token issuer | POC-11a, 11b | Run all other POCs on the dev install |
+| Network egress / source allowlists for worker pods | POC-11a (U19) | Run workers where Dagster's run pods run today, or ask each source owner to add the new egress IPs (lead time per vendor) |
+| KEDA / Worker Controller approval | POC-01, POC-10 | Fixed replicas; Workflow patching instead of Worker Versioning |
+| `matching.enableFairness` platform PR | POC-06 option c | Semaphore Workflow only (option b) |
+| Platform team time for drills and load test | POC-11b | Book it during P0 |
 
 ### 6.1 Order and dependencies
 
@@ -466,21 +540,21 @@ flowchart LR
 
 ### 6.2 Summary
 
-| POC | Question | Unknowns | Wave | Effort (days) |
-|---|---|---|---|---|
-| 11a | Our Namespace works on the shared cluster; Worker auth and persistence hold | U15 | Step 0 | 1 + platform lead time |
-| 11b | Shared cluster is fit for production loads | U15 | A | 3 |
-| 01 | Per-job resource and secret isolation | U01, U02, U16 | A | 4–5 |
-| 02 | ELT in an Activity: cancel, crash, retry | U03, U04, U18 | A | 3–4 |
-| 03 | State continuity from Dagster | U05 | A | 2 |
-| 04 | dbt trigger/coordinator: overlap, failure, retry | U06, U08 | A | 4 |
-| 06 | Shared API rate limits and run-queue caps | U09 | A | 3 |
-| 07 | Partitions and backfills | U11, U18 | A | 7 |
-| 08 | Alerting, freshness, logs | U12, U17 | B | 3 |
-| 09 | On-call tasks without the Dagster UI | U13 | B | 2 |
-| 10 | Safe deploys during long loads | U14 | B | 2–3 |
-| 12 | *Optional:* lineage and catalog beyond dbt docs + Snowflake lineage | — | B (optional) | 3 (not in totals) |
-| | **Totals** | | Step 0 ≈ 1; A ≈ **28** (3 + 5 + 4 + 2 + 4 + 3 + 7); B ≈ **8** (3 + 2 + 3) | |
+| POC | Question | Unknowns | Wave | Baseline (days) | Expected, LLM (days) | Aggressive, LLM (days) |
+|---|---|---|---|---|---|---|
+| 11a | Our Namespace works on the shared cluster; Worker auth, persistence and network reach hold | U15, U19 | Step 0 | 1.5 + platform lead time | 1.4 | 1.2 |
+| 11b | Shared cluster is fit for production loads | U15 | A | 3 | 2.8 | 2.5 |
+| 01 | Per-job resource and secret isolation | U01, U02, U16 | A | 4–5 | 3.8 | 3.2 |
+| 02 | ELT in an Activity: cancel, crash, retry; one worker image | U03, U04, U18, U20 | A | 3.5–4.5 | 3.2 | 2.6 |
+| 03 | State continuity from Dagster | U05 | A | 2 | 1.8 | 1.5 |
+| 04 | dbt trigger/coordinator: overlap, failure, retry | U06, U08 | A | 4 | 3.3 | 2.7 |
+| 06 | Shared API rate limits and run-queue caps | U09 | A | 3 | 2.4 | 2.0 |
+| 07 | Partitions and backfills | U11, U18 | A | 7 | 5.6 | 4.6 |
+| 08 | Alerting, freshness, logs | U12, U17 | B | 3 | 2.4 | 2.0 |
+| 09 | On-call tasks without the Dagster UI | U13 | B | 2 | 1.7 | 1.4 |
+| 10 | Safe deploys during long loads | U14 | B | 2–3 | 2.1 | 1.8 |
+| 12 | *Optional:* lineage and catalog beyond dbt docs + Snowflake lineage | — | B (optional) | 3 (not in totals) | 2.5 (not in totals) | 2.1 (not in totals) |
+| | **Totals** | | | Step 0 ≈ 1.5; A ≈ **27.5**; B ≈ **7.5** | Step 0 ≈ 1.4; A ≈ **22.7**; B ≈ **6.1** | Step 0 ≈ 1.2; A ≈ **19.1**; B ≈ **5.2** |
 
 ### 6.3 Shared setup
 
@@ -500,11 +574,11 @@ flowchart LR
 |---|---|
 | Question | Can the shared cluster run our production loads safely, and what must the platform team add first? |
 | Not tested | That Temporal needs a persistence DB and which versions are supported [S3](sources.md#s3) |
-| 11a steps | 1. PR to the platform values files registering our non-prod Namespace and token issuer. 2. Worker reads the token from the provided file path; check it keeps working after the token in the file changes. 3. Start a Workflow, restart every server pod, check the Workflow is still there |
+| 11a steps | 1. PR to the platform values files registering our non-prod Namespace and token issuer. 2. Worker reads the token from the provided file path; check it keeps working after the token in the file changes. 3. Start a Workflow, restart every server pod, check the Workflow is still there. 4. **Network and secrets reach (U19):** from a worker pod, connect to one source of each type (API, database, CDC, S3, SFTP), the Meltano state backend and Snowflake, using the same secrets path as Dagster pods; note the egress IPs |
 | 11b steps | 1. Record shard count and Namespace retention. 2. Register our Search Attributes. 3. If POC-06 needs it: PR for `matching.enableFairness` scoped to our Namespace. 4. Kill each server service pod while 10 POC Workflows run; ask the platform team to fail over the DB. 5. Load test: 50 concurrent ingests + the POC-07 backfill burst; watch our latency while another tenant is busy, and theirs while ours runs. 6. Agree backup/restore, upgrade and paging |
-| Pass | No Workflow lost or stuck after each failure · token refresh works for 24 h without restart · Search Attributes registered · Namespace rate limits do not throttle our peak · our backfill burst does not slow other tenants · written ownership of who is paged when the cluster is down |
+| Pass | 11a: every source type, the state backend and Snowflake reachable from worker pods with existing allowlists, or allowlist requests filed with dates · No Workflow lost or stuck after each failure · token refresh works for 24 h without restart · Search Attributes registered · Namespace rate limits do not throttle our peak · our backfill burst does not slow other tenants · written ownership of who is paged when the cluster is down |
 | Fail → | List missing config/limits as platform asks with dates; Wave A continues on a dev install |
-| Depends | Q2, F1, F2, F9, F10 |
+| Depends | Q2, Q15, Q17, F1, F2, F9, F10 |
 
 #### POC-01 — Per-job resource isolation (U01, U02, U16)
 
@@ -524,9 +598,9 @@ flowchart LR
 |---|---|
 | Question | When the Activity is cancelled, times out, or its worker dies mid-load, does the Meltano/dlt process stop, and does the retry leave `RAW` without duplicates or gaps? |
 | Not tested | That Activities retry and need heartbeats to see cancel (documented) |
-| Setup | Activity runs `meltano run …` or the dlt pipeline as a **subprocess**, heartbeats every N s, kills the process group on cancel. Sync Activity with a thread-pool `activity_executor`, or async with a non-blocking subprocess API |
+| Setup | Activity runs `meltano run …` or the dlt pipeline as a **subprocess**, heartbeats every N s, kills the process group on cancel. Sync Activity with a thread-pool `activity_executor`, or async with a non-blocking subprocess API. **One worker image (U20):** build it with `temporalio`, dlt, dbt Core (today's version) and Meltano; resolve dependencies |
 | Steps | For S-big, S-dlt and S-ops: 1. Cancel mid-load. 2. Kill the worker pod mid-load. 3. Let Start-To-Close expire. 4. Inject a Snowflake error after 50 % of rows. After each, let the Retry Policy finish |
-| Pass | No orphan process or open Snowflake query · after retry, `RAW` matches a clean single run on row count, primary-key uniqueness, the set of primary keys and row values (hash per row) · bookmark advances exactly once · cancel seen within 2× heartbeat interval |
+| Pass | Image builds with today's dlt and dbt versions, no dependency conflicts · No orphan process or open Snowflake query · after retry, `RAW` matches a clean single run on row count, primary-key uniqueness, the set of primary keys and row values (hash per row) · bookmark advances exactly once · cancel seen within 2× heartbeat interval |
 | Fail → | Change that source's write disposition (e.g. append → merge) before it migrates; record per source |
 | Depends | Q11, Q16, F8 |
 
@@ -645,16 +719,18 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  P0["P0 Namespace PR<br/>(1 wk + platform lead time)"] --> P1["P1 POCs<br/>Wave A → go/no-go<br/>Wave B<br/>(6–8 wks)"]
-  P1 --> P2["P2 Foundation<br/>prod platform, libraries,<br/>alerts, runbooks<br/>(3–4 wks)"]
-  P2 --> P3["P3 Pilot<br/>1 cluster, 2–3 sources<br/>(2 wks)"]
-  P3 --> P4["P4 Waves<br/>remaining clusters<br/>(~10 sources / wk)"]
-  P4 --> P5["P5 Decommission<br/>Dagster read-only → off<br/>(2 wks)"]
+  P0["P0 Prepare<br/>(1.5 wks; Namespace<br/>review alongside)"] --> P1["P1 POCs<br/>Wave A → go/no-go<br/>Wave B<br/>(5 wks)"]
+  P1 --> P2["P2 Foundation<br/>prod platform, libraries,<br/>alerts, runbooks<br/>(3 wks)"]
+  P2 --> P3["P3 Pilot<br/>1 cluster, 2–3 sources<br/>(2 wks; first wave<br/>ported during soak)"]
+  P3 --> P4["P4 Waves<br/>remaining clusters<br/>(11 wks, ~4.2 sources / wk)"]
+  P4 --> P5["P5 Decommission<br/>Dagster read-only → off<br/>(30-day wait)"]
 ```
+
+Durations: aggressive target, LLM-assisted, one person working alone, full-time. Last cutover ≈ week 23, Dagster off ≈ week 27; risk band ≈ 27–32 weeks to last cutover ([§8.6](#86-calendar)).
 
 | Phase | Output | Exit criteria |
 |---|---|---|
-| P0 Prepare | Namespace PR merged; exports of Dagster tag concurrency limits, freshness checks, partition definitions and Launchpad defaults; list of non-ELT ops jobs; **backfill input per job** (accepts a partition range, or only one partition per run) | POC scope frozen; POC-11a Namespace available |
+| P0 Prepare | Namespace PR merged; exports of Dagster tag concurrency limits, freshness checks, partition definitions and Launchpad defaults; list of non-ELT ops jobs; **backfill input per job** (accepts a partition range, or only one partition per run) | POC scope frozen; Namespace PR raised (POCs other than 11a/11b start on the dev install) |
 | P1 POCs | `docs/poc-results/POC-xx.md` per POC | Wave A all pass ([§6.5](#65-go--no-go-after-wave-a)); Wave B pass or risk accepted in writing |
 | P2 Foundation | Prod Namespace (POC-11b agreements); worker images; shared library: `IngestWorkflow`, `BackfillWorkflow`, `run_elt` Activity, dbt trigger (POC-04 option); concurrency control (POC-06); Search Attributes; Slack/PagerDuty alerts and freshness checks; replay tests in CI; runbook | Failure drills pass; runbook reviewed by on-call |
 | P3 Pilot | 1 dependency cluster on Temporal | 2 weeks with no duplicates, no missed runs, freshness ≤ today |
@@ -707,6 +783,7 @@ stateDiagram-v2
 
 | Check | Proven by |
 |---|---|
+| Source, state backend and Snowflake reachable from worker pods (network, allowlist, secret) | POC-11a |
 | Write disposition reviewed for retry safety | POC-02 |
 | State backend / pipeline name identical to Dagster's | POC-03 |
 | Resource class or K8s Job spec matches today's requests/limits | POC-01 |
@@ -760,4 +837,287 @@ stateDiagram-v2
 | Our 2-year backfills slow other tenants | Batched backfills with caps; joint load test (POC-07, POC-11b) | U11, U15 |
 | Partitioned jobs cannot be tracked or backfilled | `BackfillWorkflow` + status table proven in POC-07 before any partitioned source moves | U11 |
 | Backfill moves the live bookmark | Backfills use their own state ID; POC-07 compares the next live run with a clean run | U05, U11 |
+| Sources reject the new workers' egress IPs | Check every source type in POC-11a; file allowlist requests early with dates | U19 |
 | Shared API token over-used during transition | Move token-sharing sources together; split caps if not possible (POC-06) | U09 |
+
+---
+
+## 8. Effort and timeline estimates
+
+> **In short** (all numbers are *estimates*; factors and contingency are *judgement*)
+> - **Target (aggressive):** ~**115 engineer-days** (ED). Last cluster cut over in ≈ **23 weeks**; Dagster switched off ≈ 27 weeks (after the 30-day no-rollback wait). One person, working alone, full-time.
+> - **Risk band:** if LLM gains are only average (expected), ~137 ED and ≈ 27 weeks; with a 20 % buffer on top, ~164 ED and ≈ 32 weeks. Without LLM help: ~171 ED, ≈ 34 weeks.
+> - **What makes it aggressive:** top-of-range LLM factors ([§8.2](#82-llm-factors-and-evidence)), POCs start on a dev install during the Namespace review, the next wave is ported during the pilot soak, and all sources are ported from one generated template.
+> - **POC phase** (proves no blockers): ~33 ED, go / no-go at week 5.6, all POCs done by week 6.6 ([§6.0](#60-poc-phase-at-a-glance)).
+> - **Waves (porting and verifying 47 sources) are half the effort.** Fixed waits (pilot soak, 30-day wait) do not shrink with LLM help.
+
+### 8.1 Method
+
+```mermaid
+flowchart LR
+  I["Plan item<br/>(POC, build step, source)"] --> S["Split work into 4 types<br/>R repetitive · G new code<br/>D design/debug · O operate/verify"]
+  S --> B["Baseline ED per type<br/>(no LLM)"]
+  B --> X["× LLM factor per type<br/>aggressive or expected (§8.2)"]
+  X --> L["LLM-assisted ED"]
+  L --> T["Calendar: 1 person,<br/>items in sequence,<br/>overlaps + fixed waits"]
+```
+
+| Assumption | Value |
+|---|---|
+| Team | **One person, working alone** (confirmed by the team, 2026-11-13). Knows Dagster, Meltano, dlt, dbt, Snowflake, Kubernetes and Python; new to Temporal. Full-time unless stated; lower focus in [§8.6](#86-calendar) |
+| LLM use | A coding agent with repo access writes code, tests and scripts; the person reviews every change and runs every check |
+| Unit | 1 **ED** = one focused engineer-day; 5 ED per week. Meetings and support duty not included |
+| Scope | 50 sources: 3 in the pilot, 47 in waves. > 75 % partitioned (Q9) → **36 partitioned, 11 not**. ~5 non-ELT ops jobs (F8 "some"; *assumption*). ~8 dependency clusters, 1 split (§7.2) |
+| Platform | Platform PRs (Namespace, Fairness, prod Namespace) reviewed within 2 weeks; platform team joins POC-11b drills |
+| POC outcomes | Simplest passing option: worker pools (POC-01 a), semaphore (POC-06 b), partition library A (POC-07). Other outcomes in [§8.7](#87-what-changes-the-estimate) |
+| Baseline | Same person without LLM help |
+| Target vs risk band | **Aggressive** is the plan target (no buffer). **Expected** and **expected + 20 %** show how far it can slip (*judgement*) |
+
+### 8.2 LLM factors and evidence
+
+Each item's baseline is split across four work types. Each type gets a time factor (LLM-assisted time ÷ baseline time).
+
+| Type | What | Examples in this plan | Aggressive (target) | Expected | Basis |
+|---|---|---|---|---|---|
+| **R** Repetitive | Same pattern many times, spec exists | Port 50 source configs from one template, freshness checks, config export | **×0.30** | ×0.45 | Top of the measured range: 55.8 % faster on a well-specified greenfield task [S158](sources.md#s158); aggressive assumes generated, batch-reviewed configs (*judgement*) |
+| **G** New code | New code with a clear spec | Workflows, Activities, CLI, tests, Helm values, scripts | **×0.50** | ×0.65 | Between the 21 % [S159](sources.md#s159) and 55.8 % [S158](sources.md#s158) measured gains; aggressive sits near the top |
+| **D** Design / debug | New concurrency or failure logic; debugging in our setup | Semaphore, backfill batching, dbt overlap, state continuity | **×0.70** | ×0.85 | Experienced developers on complex, familiar code were 19 % **slower** with early-2025 tools [S160](sources.md#s160); METR believes current tools speed developers up more, but its data is "only very weak evidence" [S161](sources.md#s161) |
+| **O** Operate / verify | Run, observe, compare, coordinate, decide | Drills, load tests, soak, row checks, platform asks, cutovers | **×0.90** | ×1.00 | Bound by wall clock and people. Aggressive assumes LLM-written check scripts and log triage save ~10 %. AI adoption came with an estimated 7.2 % drop in delivery stability [S162](sources.md#s162), so every check still runs |
+| Learning | Temporal ramp-up | Concepts, SDK, CLI | **×0.70** | ×0.80 | LLM as tutor (*judgement*) |
+
+**Evidence used**
+
+| Study | Setting | Result | Use here |
+|---|---|---|---|
+| [S158](sources.md#s158) GitHub Copilot experiment (2023) | Recruited developers build an HTTP server in JavaScript | AI group "completed the task 55.8% faster" | Upper bound; fits R and G work |
+| [S159](sources.md#s159) Google enterprise RCT (2024) | 96 Google engineers, "complex, enterprise-grade task" | ~21 % faster; "our confidence interval is large" | Lower bound for G |
+| [S160](sources.md#s160) METR RCT (July 2025) | 16 experienced open-source developers, 246 real issues in their own large repos | 19 % slower with AI; they believed they were ~20 % faster | Caution for D; do not trust felt speed-up |
+| [S161](sources.md#s161) METR update (Feb 2026) | Follow-up study on late-2025 tools | Selection effects make the data unreliable; METR believes developers "are more sped up from AI tools now" | D gets a gain, not a slowdown |
+| [S162](sources.md#s162) DORA 2024 | Survey of software teams | AI adoption: est. −1.5 % delivery throughput, −7.2 % delivery stability | Keep O near ×1.0; review all LLM code |
+
+None of these studies measured data-pipeline migrations; applying them here is *inference*.
+
+### 8.3 Estimates per item
+
+Mix = baseline ED per work type (R / G / D / O). Expected = R×0.45 + G×0.65 + D×0.85 + O×1.0. Aggressive = R×0.3 + G×0.5 + D×0.7 + O×0.9.
+
+**P0 Prepare**
+
+| ID | Item | Plan ref | Baseline ED | Mix R / G / D / O | Expected ED | Aggressive ED | Wall clock / note |
+|---|---|---|---|---|---|---|---|
+| P0-1 | Namespace PR (values files + token issuer) | §2.2, POC-11a | 0.5 | – / 0.25 / – / 0.25 | 0.4 | 0.4 | + platform lead time (≤ 2 wks), overlapped with P0 and early POCs on a dev install |
+| P0-2 | Temporal ramp-up | — | 3 | learning | 2.4 | 2.1 | Learning; LLM as tutor |
+| P0-3 | Export Dagster config: tag limits, freshness checks, partition defs, Launchpad defaults, backfill input per job | §7.1 P0 | 3 | 1.5 / 0.5 / – / 1 | 2.0 | 1.6 | Script over Dagster code; review by hand |
+| P0-4 | Inventory non-ELT ops jobs | F8, U18 | 1 | – / 0.5 / – / 0.5 | 0.8 | 0.7 |  |
+| P0-5 | Dependency clusters: parse `manifest.json`, union-find with shared tokens, order, splits | §7.2 | 2.5 | – / 1.5 / 1 / – | 1.8 | 1.5 | Decides wave order |
+| P0-6 | POC setup: Snowflake clone, POC sources, result template, dev Temporal install | §6.3 | 2 | – / 1 / – / 1 | 1.7 | 1.4 | Dev install lets POCs start before the Namespace exists |
+| | **Subtotal** | | **12.0** | | **9.1** | **7.6** | |
+
+**P1 POCs**
+
+| ID | Item | Plan ref | Baseline ED | Mix R / G / D / O | Expected ED | Aggressive ED | Wall clock / note |
+|---|---|---|---|---|---|---|---|
+| 11a | POC-11a Namespace, token rotation, restart check, **network and secrets reach** (U19) | §6.4 | 1.5 | – / 0.3 / – / 1.2 | 1.4 | 1.2 | + 24 h token test (wall clock) |
+| 11b | POC-11b Shared-cluster readiness | §6.4 | 3 | – / 0.5 / – / 2.5 | 2.8 | 2.5 | Drills and load test with platform team |
+| 01 | POC-01 Per-job resources (pools vs K8s Job) | §6.4 | 4.5 | – / 1.5 / 1.5 / 1.5 | 3.8 | 3.2 | + KEDA / Worker Controller approval |
+| 02 | POC-02 ELT in an Activity (cancel, crash, retry) + **one worker image** (U20) | §6.4 | 4 | – / 2 / 1 / 1 | 3.2 | 2.6 |  |
+| 03 | POC-03 State continuity from Dagster | §6.4 | 2 | – / 0.5 / 0.5 / 1 | 1.8 | 1.5 |  |
+| 04 | POC-04 dbt trigger / coordinator | §6.4 | 4 | – / 1.5 / 1.5 / 1 | 3.3 | 2.7 |  |
+| 06 | POC-06 Rate limits and run-queue caps | §6.4 | 3 | – / 1 / 1.5 / 0.5 | 2.4 | 2.0 | + Fairness platform PR, if used |
+| 07 | POC-07 Partitions and backfills (incl. partition library, §4.2 A vs B) | §6.4 | 7 | – / 3 / 2.5 / 1.5 | 5.6 | 4.6 | + 2-year backfill run time (wall clock) |
+| 08 | POC-08 Alerts, freshness, logs | §6.4 | 3 | – / 1.5 / 0.5 / 1 | 2.4 | 2.0 |  |
+| 09 | POC-09 On-call tasks (incl. launch CLI) | §6.4 | 2 | – / 1 / – / 1 | 1.7 | 1.4 |  |
+| 10 | POC-10 Safe deploys | §6.4 | 2.5 | – / 1 / 0.5 / 1 | 2.1 | 1.8 | + 2-hour runs (wall clock) |
+| 12 | POC-12 Lineage and catalog (*optional*) | §6.4 | 3 | – / 1.5 / – / 1.5 | 2.5 | 2.1 | Not in totals |
+| | **Subtotal** | | **36.5** | | **30.2** | **25.4** | |
+
+**P2 Foundation**
+
+| ID | Item | Plan ref | Baseline ED | Mix R / G / D / O | Expected ED | Aggressive ED | Wall clock / note |
+|---|---|---|---|---|---|---|---|
+| F1 | Prod Namespace + platform asks (Search Attributes, Fairness, retention, paging) | POC-11b, §4.2 | 1.5 | – / 0.5 / – / 1 | 1.3 | 1.2 | + platform lead time, started during P1 |
+| F2 | Worker images, S/M/L Deployments, autoscaling, CI/CD | POC-01, §4.2 | 3 | – / 1.5 / 0.5 / 1 | 2.4 | 2.0 |  |
+| F3 | Shared library to prod quality: `IngestWorkflow`, `run_elt`, `BackfillWorkflow`, partition library, `partition_status` table | §4.2, POC-02/07 | 4 | – / 2.5 / 1 / 0.5 | 3.0 | 2.4 | Reuses POC code |
+| F4 | dbt trigger (POC-04 option) + `target/` persistence | POC-04 | 1.5 | – / 0.75 / 0.5 / 0.25 | 1.2 | 1.0 |  |
+| F5 | Concurrency control (semaphore Workflow) to prod | POC-06, §4.2 | 1.5 | – / 0.5 / 0.75 / 0.25 | 1.2 | 1.0 |  |
+| F6 | Alerts (failure Activity, Grafana), port all freshness checks, gap check, log fields | POC-08, §4.2 | 3 | 1 / 1 / – / 1 | 2.1 | 1.7 | Freshness port is repetitive |
+| F7 | Launch/backfill CLI hardening, runbook, on-call review | POC-09, §4.2 | 2 | – / 1 / – / 1 | 1.7 | 1.4 |  |
+| F8 | Replay tests in CI + Worker Versioning deploy flow | POC-10 | 1.5 | – / 1 / 0.5 / – | 1.1 | 0.9 |  |
+| F9 | Cutover tooling: owner table, per-source gate on Dagster dbt sensor, cutover/rollback/verify scripts | §7.3, §7.4 | 2 | – / 1 / 0.5 / 0.5 | 1.6 | 1.3 | Makes per-source checks cheap |
+| F10 | dbt docs site + Snowflake lineage (edition check) | §4.2 lineage A, B | 0.75 | – / 0.5 / – / 0.25 | 0.6 | 0.5 |  |
+| F11 | Failure and rollback drills (P2 exit) | §7.1 | 1.5 | – / – / – / 1.5 | 1.5 | 1.4 |  |
+| | **Subtotal** | | **22.3** | | **17.6** | **14.6** | |
+
+**P3 Pilot**
+
+| ID | Item | Plan ref | Baseline ED | Mix R / G / D / O | Expected ED | Aggressive ED | Wall clock / note |
+|---|---|---|---|---|---|---|---|
+| PI-1 | Port 3 pilot sources (1 cluster) | §7.1 P3 | 3.75 | 1.5 / – / 0.75 / 1.5 | 2.8 | 2.3 | Same unit cost as P4 |
+| PI-2 | Cutover, daily checks for 2 weeks, fixes | §7.3 | 5 | – / – / 1.5 / 3.5 | 4.8 | 4.2 | 2-week soak (wall clock); spare days port the first wave |
+| | **Subtotal** | | **8.8** | | **7.6** | **6.5** | |
+
+**P4 Waves**
+
+| ID | Item | Plan ref | Baseline ED | Mix R / G / D / O | Expected ED | Aggressive ED | Wall clock / note |
+|---|---|---|---|---|---|---|---|
+| W-1 | 11 non-partitioned sources | §7.3 | 13.75 | 5.5 / – / 2.75 / 5.5 | 10.3 | 8.5 | 1.25 ED each |
+| W-2 | 36 partitioned sources (> 75 %) | §7.3 | 63 | 18 / – / 18 / 27 | 50.4 | 42.3 | 1.75 ED each |
+| W-3 | ~5 non-ELT ops jobs | F8 | 7.5 | 3.75 / – / 1.25 / 2.5 | 5.3 | 4.3 | 1.5 ED each |
+| W-4 | Cluster cutovers (~8) + 1 split cluster | §7.2, §7.3 | 5 | – / – / 1 / 4 | 4.9 | 4.3 | 0.5 ED per cluster + 1 for the split |
+| | **Subtotal** | | **89.3** | | **70.8** | **59.4** | |
+
+**P5 Decommission**
+
+| ID | Item | Plan ref | Baseline ED | Mix R / G / D / O | Expected ED | Aggressive ED | Wall clock / note |
+|---|---|---|---|---|---|---|---|
+| D-1 | Remove schedules, export run table, archive, uninstall after 30 days | §7.1 P5 | 2 | 0.5 / 0.5 / – / 1 | 1.6 | 1.3 | + 30-day wait (wall clock) |
+| | **Subtotal** | | **2.0** | | **1.6** | **1.3** | |
+
+**Per-source unit cost (P3, P4)**, from the §7.3 checklist
+
+| Step | Type | Non-partitioned | Partitioned | Ops job |
+|---|---|---|---|---|
+| Port config: ELT command, resource class, concurrency key, Schedule (paused), typed input with Launchpad defaults, alerts | R | 0.5 | 0.5 | 0.75 |
+| Review write disposition and state ID (POC-02, POC-03 rules) | D | 0.25 | 0.25 | 0.25 |
+| Map partition definition; list partitions Dagster marked missing or failed | D | – | 0.25 | – |
+| Dry run on the cloned DB; compare rows with Dagster | O | 0.25 | 0.25 | 0.25 |
+| Backfill or hand over missing partitions | O | – | 0.25 | – |
+| Cutover, first-run checks (scripts from F9) | O | 0.25 | 0.25 | 0.25 |
+| **Baseline ED** | | **1.25** | **1.75** | **1.5** |
+| **Expected ED** | | **0.94** | **1.40** | **1.05** |
+| **Aggressive ED** | | **0.77** | **1.18** | **0.85** |
+
+### 8.4 Where the §4.2 picks are costed
+
+| §4.2 pick | Built in | Made production-ready in |
+|---|---|---|
+| Partition library (A; B compared) | POC-07 | F3 |
+| `partition_status` table + materialization metadata | POC-07 | F3 |
+| `BackfillWorkflow`; `temporal schedule backfill` for missed times; batch CLI to stop a backfill | POC-07 | F3, F7 |
+| Typed input + launch CLI (Launchpad) | POC-07, POC-09 | F7 |
+| Semaphore Workflow; Fairness per-key rate limit | POC-06 | F5, F1 (platform PR) |
+| Worker pools S/M/L (K8s Job only for heaviest jobs) | POC-01 | F2 ([§8.7](#87-what-changes-the-estimate) if Jobs needed) |
+| dbt docs; Snowflake lineage | — | F10 |
+| OpenLineage + Marquez / OpenMetadata (optional) | POC-12 | Not estimated; see §8.7 |
+| `dbt source freshness` + SQL gap check | POC-08 | F6 |
+| Failure Activity + Grafana alerts | POC-08 | F6 |
+| Run history: clean start, optional export | — | D-1 |
+
+### 8.5 Totals and scenarios
+
+| Phase | No LLM (ED) | Expected (ED) | Expected + 20 % (ED) | **Aggressive target (ED)** |
+|---|---|---|---|---|
+| P0 Prepare | 12.0 | 9.1 | 10.9 | **7.6** |
+| P1 POCs | 36.5 | 30.2 | 36.3 | **25.4** |
+| P2 Foundation | 22.3 | 17.6 | 21.1 | **14.6** |
+| P3 Pilot | 8.8 | 7.6 | 9.1 | **6.5** |
+| P4 Waves | 89.3 | 70.8 | 85.0 | **59.4** |
+| P5 Decommission | 2.0 | 1.6 | 1.9 | **1.3** |
+| **Total** | **171** | **137** | **164** | **115** |
+| Saved vs no LLM | — | 20 % | — | **33 %** |
+| POC-12 (optional, not in totals) | 3.0 | 2.5 | 3.0 | 2.1 |
+
+```mermaid
+pie showData title Aggressive target effort by phase (ED)
+  "P0 Prepare" : 7.6
+  "P1 POCs" : 25.4
+  "P2 Foundation" : 14.6
+  "P3 Pilot" : 6.5
+  "P4 Waves" : 59.4
+  "P5 Decommission" : 1.3
+```
+
+### 8.6 Calendar
+
+One person, items in sequence in the §6.1 order. Three overlaps make the target aggressive without adding risk: (1) P0 and the first POCs run on a dev install while the Namespace PR is in review; (2) the prod Namespace PR (F1) is raised during P1; (3) spare days in the 2-week pilot soak port the first wave (3.5 ED aggressive).
+
+| Phase | **Aggressive target** | Expected | Expected + 20 % | What sets the length |
+|---|---|---|---|---|
+| P0 Prepare | **1.5 wks** | 1.8 wks | 2.2 wks | Effort; Namespace review (≤ 2 wks) runs alongside |
+| P1 POCs | **5.1 wks** | 6.0 wks | 7.3 wks | Effort; detail in [§6.0](#60-poc-phase-at-a-glance) |
+| P2 Foundation | **2.9 wks** | 3.5 wks | 4.2 wks | Effort |
+| P3 Pilot | **2 wks** | 2 wks | 2 wks | **Fixed** 2-week soak (P3 exit criterion) |
+| P4 Waves | **11.2 wks** (~4.2 sources/wk) | 13.7 wks | 16.8 wks | Effort; each cluster stable before the next |
+| **Last cluster cut over** | **≈ 23 wks** | ≈ 27 wks | ≈ 32 wks | |
+| P5 Decommission | **+ 30 days** | + 30 days | + 30 days | **Fixed** no-rollback wait; ~1.3 ED of work |
+| **Dagster off** | **≈ 27 wks** | ≈ 32 wks | ≈ 37 wks | |
+
+Without LLM help the same plan takes ≈ 34 weeks to the last cutover (≈ 38 to Dagster off).
+
+**Focus.** ED counts focused days only. If part of each week goes to running today's Dagster jobs, support or leave, effort phases stretch; fixed waits do not.
+
+| Share of time on the migration | Last cutover, aggressive | Last cutover, expected |
+|---|---|---|
+| 100 % | ≈ 23 wks | ≈ 27 wks |
+| 80 % | ≈ 28 wks | ≈ 34 wks |
+| 60 % | ≈ 38 wks | ≈ 45 wks |
+
+```mermaid
+gantt
+  title Calendar, one person, aggressive target (start date notional)
+  dateFormat YYYY-MM-DD
+  axisFormat %b
+  section Migration
+  P0 Prepare           :a0, 2027-01-04, 11d
+  P1 Wave A            :a1, after a0, 28d
+  Go / no-go           :milestone, ma, after a1, 0d
+  P1 Wave B            :a2, after a1, 7d
+  P2 Foundation        :a3, after a2, 20d
+  P3 Pilot (soak)      :a4, after a3, 14d
+  P4 Waves             :a5, after a4, 78d
+  Last cutover         :milestone, mc, after a5, 0d
+  P5 Wait, then off    :a6, after a5, 32d
+```
+
+**Wall-clock waits** (not effort, not shortened by LLM help)
+
+| Wait | Where | Assumed |
+|---|---|---|
+| Platform PRs: non-prod Namespace, Fairness (if used), prod Namespace | P0, POC-06, F1 | ≤ 2 wks each, kept off the critical path by the overlaps above |
+| Source allowlists for new egress IPs (only if U19 finds a gap) | POC-11a | Not in the target; see [§8.7](#87-what-changes-the-estimate) |
+| KEDA / Worker Controller approval | POC-01, POC-10 | Within P1; if refused, fixed replicas |
+| 24 h token-rotation test; 2-hour loads | POC-11a, POC-10 | Inside the POC days |
+| 2-year backfill run for S-part-5m | POC-07 | Unknown; measured in POC-07 step 8 |
+| Pilot soak | P3 | 2 wks |
+| Each cluster "N runs clean" before the next | P4 | Inside the weekly pace |
+| No-rollback period | P5 | 30 days |
+
+**Working alone: risks and mitigations** (*judgement*)
+
+| Risk | Mitigation |
+|---|---|
+| No second human reviewer for code or cutovers | LLM review of every change, plus replay tests (F8) and scripted per-source checks (F9); the platform team reviews platform PRs |
+| One person is the single point of knowledge | Runbook (F7) and POC result pages (§6.3) written as you go; on-call tasks proven by someone else in POC-09 ("someone not on the POC team") |
+| Drills need someone to break things while someone watches | Script the faults (pod kill, OOM, Snowflake error) so one person can run and watch; platform team runs the DB failover (POC-11b) |
+| Cutover and rollback need full attention | One cluster at a time, at a quiet hour; no cutover before leave |
+| Aggressive pace cuts verification | Speed comes from code and porting, never from skipping a pass criterion or a per-source check; if a check fails, the date moves, not the check |
+| Migration slows when Dagster needs attention | Plan at 80 % focus if Dagster support stays with the same person |
+
+### 8.7 What changes the estimate
+
+| Change | Effect (baseline → aggressive) |
+|---|---|
+| Each extra source beyond 50 | +1.25–1.75 ED → +0.77–1.18 ED |
+| POC-11a: sources reject the workers' egress IPs (U19) | Calendar: vendor allowlist lead time per source; effort ~0.25 ED per source to request and test |
+| POC-02: version clash in one worker image (U20) | +1–2 ED → +0.5–1 ED: separate images / Task Queues per tool |
+| POC-01: heaviest jobs need a K8s Job launcher (§4.2 per-job resources B) | +2–3 ED → +1.2–1.8 ED in F2 |
+| POC-04 picks the coordinator (option b) | +1.5 ED → +0.9 ED in F4 |
+| POC-02 fails for a source: change write disposition | +0.5 ED per source → +0.3 ED |
+| POC-03 fails for a source: one-time state copy or controlled re-sync | +0.5–1 ED per source, plus Snowflake and API cost |
+| POC-07 picks Dagster partition classes (option B) for time/static types | −1 to −2 ED in F3 |
+| POC-12 is run and passes: production lineage service | POC +3 → +2.1 ED; rollout not estimated (new service to run) |
+| Optional shadow run (§7.4) | +1 wk calendar; ~1 ED per pilot source |
+| Platform PR takes > 2 wks | Calendar only, if POC-11a and 11b slip past the other POCs |
+| A second person joins (not planned) | Roughly halves effort phases; +2.1 ED ramp-up |
+| Wave A says stop (§6.5) | Wave B and P2–P5 not spent; sunk cost ≈ P0 + Wave A ≈ 28 ED (aggressive) |
+
+### 8.8 Reconciliation with earlier figures
+
+| Figure | Before | Now (aggressive / expected) | Why |
+|---|---|---|---|
+| Wave A (excl. 11a) | ~28 ED | 19.1 / 22.7 ED (baseline 27.5) | Midpoints of ranges; +0.5 ED image check in POC-02 (U20) |
+| POC-11a | 1 ED | 1.2 / 1.4 ED (baseline 1.5) | +0.5 ED network and secrets reach check (U19) |
+| Wave B | ~8 ED | 5.2 / 6.1 ED (baseline 7.5) | POC-10 at the midpoint of 2–3 |
+| P2 Foundation | 3–4 wks | 2.9 / 3.5 wks | Bottom-up list F1–F11 |
+| P4 Waves | ~10 sources / wk | ~4.2 / ~3.4 sources / wk | Bottom-up per-source checklist (§7.3); 10 / wk would need about 2–3 people |
+| P5 | 2 wks | ~1.3 ED of work + 30-day wait | The 30-day exit criterion was already in §7.1 |

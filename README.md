@@ -12,9 +12,9 @@ Every fact is cited to an official page; judgements and inferences are labelled.
 | Doc | What it answers | Read it if |
 |---|---|---|
 | [docs/1-comparison.md](docs/1-comparison.md) | How Temporal and Dagster differ, with exact limits, per-scenario patterns, a matrix and a decision flowchart | You are choosing an orchestrator |
-| [docs/2-migration-plan.md](docs/2-migration-plan.md) | Current state, feature mapping, what Temporal lacks natively and options to get it (partitions, backfills, lineage, freshness, alerts), unknowns register, POC plan, cutover and rollback runbook | You are working on the migration |
+| [docs/2-migration-plan.md](docs/2-migration-plan.md) | Current state, feature mapping, what Temporal lacks natively and options to get it (partitions, backfills, lineage, freshness, alerts), unknowns register, POC plan, cutover and rollback runbook, effort and timeline estimates (LLM-assisted) | You are working on the migration |
 | [docs/3-evidence-and-gaps.md](docs/3-evidence-and-gaps.md) | What could not be verified, source conflicts, verification log | You want to check a claim |
-| [docs/sources.md](docs/sources.md) | All 157 numbered sources (`[S#]`) | You follow a citation |
+| [docs/sources.md](docs/sources.md) | All 162 numbered sources (`[S#]`) | You follow a citation |
 
 ## TL;DR
 
@@ -48,6 +48,7 @@ flowchart LR
 | Dagster features not in Temporal | Partitions, partition status, lineage, asset catalog, freshness, alerts (re-verified 2026-11-12). Each has a recommended replacement: partition library + Snowflake status table + `BackfillWorkflow`, dbt docs + Snowflake lineage, `dbt source freshness`, failure Activity + Grafana alerts ([§4.1–4.2](docs/2-migration-plan.md#41-native-support-check-re-verified-2026-11-12)) |
 | Other High risks | Per-job isolation, shared API token limits, duplicates and state under retries, dbt overlap, shared-cluster readiness |
 | Cutover unit | Dependency cluster (all sources feeding the same dbt models move together), each reversible; a too-big cluster can be split using a shared dbt job and exclusions ([§7.2](docs/2-migration-plan.md#72-cutover-unit-dependency-cluster)) |
+| Effort (estimate) | **Aggressive target with LLM help, one person:** ~115 engineer-days; POC go / no-go ≈ week 5.6; last cutover ≈ week 23; Dagster off ≈ week 27. Risk band ≈ 27–32 weeks to last cutover. POC plan at a glance in [§6.0](docs/2-migration-plan.md#60-poc-phase-at-a-glance); estimates in [§8](docs/2-migration-plan.md#8-effort-and-timeline-estimates) |
 
 ## Conventions
 
