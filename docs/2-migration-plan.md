@@ -61,7 +61,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  S0["Step 0<br/>Namespace PR<br/>POC-11a"] --> WA["Wave A POCs<br/>~20 eng-days<br/>go / no-go wk ~5.6"]
+  S0["Step 0<br/>Namespace PR<br/>POC-11a"] --> WA["Wave A POCs<br/>~19 eng-days<br/>go / no-go wk ~5.6"]
   WA --> WB["Wave B POCs<br/>~5 eng-days"]
   WB --> F["Foundation<br/>~3 wks"]
   F --> P["Pilot<br/>1 cluster, 2 wks"]
