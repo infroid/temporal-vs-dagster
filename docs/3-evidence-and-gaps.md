@@ -246,3 +246,5 @@ The effort numbers in [§8 of the plan](2-migration-plan.md#8-effort-and-timelin
 | Late-2025 data unreliable (selection effects); METR believes developers "are more sped up from AI tools now"; "only very weak evidence" | [S161](sources.md#s161) | Confirmed (**3P**). Late-2025 point estimates not used: sign convention unclear in the fetched text |
 | AI adoption: est. −1.5 % delivery throughput, −7.2 % delivery stability | [S162](sources.md#s162) | Confirmed (vendor blog summarising the report) |
 | These results transfer to data-pipeline migrations | — | **I** (inference): no study of this kind of work was found |
+| Aggressive target factors (R ×0.3, G ×0.5, D ×0.7, O ×0.9) | [S158](sources.md#s158) [S159](sources.md#s159) | **I**: chosen at or above the top of the measured range at the team's request (2026-11-13); expected factors kept as the risk band |
+| U19 (worker egress / source allowlists) and U20 (one worker image) are real risks | — | **I**: from our setup, not from docs; added as POC-11a and POC-02 checks |
