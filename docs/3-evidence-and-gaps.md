@@ -21,6 +21,7 @@ Every claim the research could **not** confirm, every source conflict, and the v
 5. [Third-party and vendor-blog items](#5-third-party-and-vendor-blog-items)
 6. [Open questions for a spike](#6-open-questions-for-a-spike)
 7. [Verification log (2026-11-11)](#7-verification-log-2026-11-11)
+8. [Verification log (2026-11-12): Dagster features in Temporal](#8-verification-log-2026-11-12-dagster-features-in-temporal)
 
 ## 1. Research-method caveats
 
@@ -212,3 +213,22 @@ Migration-specific unknowns live in the [unknowns register](2-migration-plan.md#
 | Backfill: one run per partition default; `multi_run`, `single_run` | [S65](sources.md#s65) | Confirmed |
 | `dagster-embedded-elt` deprecated → `dagster-sling`, `dagster-dlt` | [S72](sources.md#s72) | Confirmed |
 | Fivetran component keys and default "manual" schedule | [S75](sources.md#s75) | Confirmed; YAML sketch fixed to real key placement |
+
+## 8. Verification log (2026-11-12): Dagster features in Temporal
+
+| Claim | Pages | Result |
+|---|---|---|
+| Temporal docs have no partition or lineage page | [S144](sources.md#s144) | Confirmed by absence in the docs index; conclusion from absence |
+| No Temporal integration for OpenLineage | [S146](sources.md#s146) [S147](sources.md#s147); web search | Not found (*absence*); OpenLineage integrations page body did not load |
+| Bulk `cancel`/`terminate`/`signal`/`delete` by `--query`; batch reset only to `FirstWorkflowTask`, `LastWorkflowTask`, `BuildId` | [S142](sources.md#s142) | Confirmed. Batch actions in the Web UI still not documented (TG26) |
+| Web UI Start Workflow form ("single JSON value"); "Start Workflow Like This One" copies only the first argument | [S31](sources.md#s31) | Confirmed |
+| Retention Period: CLI default 3 days; min 1 hour local / 1 day global; no max on ≥ 1.18 | [S2](sources.md#s2) | Confirmed |
+| SQL visibility: 10 Keyword; 3 each of Bool, Datetime, Double, Int, KeywordList, Text | [S38](sources.md#s38) | Confirmed |
+| Schedule backfill: `AllowAll` parallel, `BufferAll` sequential; `TemporalScheduledStartTime` added to runs | [S10](sources.md#s10) | Confirmed. Page also says `BufferAll` backfills are subject to "the Catchup Window and internal buffer limits" but manual triggers and backfills are not restricted by it: unclear, check in POC-07 |
+| Fairness: per-key rate limit `fairness-key-rps-limit-default`; Priority and Fairness change dispatch order, not concurrency | [S124](sources.md#s124) | Confirmed (wording paraphrased by fetch tool) |
+| Dagster named dynamic partitions need `dynamic_partitions_store` (`DagsterInstance`) | [S109](sources.md#s109) | Confirmed |
+| Dagster REST `report_asset_materialization` with `partition`; works on OSS webserver | [S152](sources.md#s152) | Confirmed; partitioned external assets not documented in [S153](sources.md#s153) |
+| Dagster freshness policies: opt-in preview in OSS; alerts docs labelled Dagster+ | [S154](sources.md#s154) | Confirmed; external-asset support not stated |
+| Snowflake lineage: Enterprise+, COPY/CTAS/INSERT…SELECT/MERGE, 1 year | [S151](sources.md#s151) | Confirmed |
+| `dbt-ol` drop-in for `dbt`, Snowflake supported | [S147](sources.md#s147) | Confirmed |
+| Kubernetes Job definition | [S156](sources.md#s156) | Confirmed (one line only; other Job fields not checked) |
