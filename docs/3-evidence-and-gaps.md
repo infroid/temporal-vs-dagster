@@ -174,7 +174,8 @@ Migration-specific unknowns live in the [unknowns register](2-migration-plan.md#
 | Dagster latest version | [S95](sources.md#s95) [S94](sources.md#s94) [S52](sources.md#s52) | PyPI 1.13.29 (2026-11-05); GitHub "Latest" 1.13.28 (30 Oct); docs picker 1.12.8 (C1) |
 | Code-sketch API names | [S115](sources.md#s115) [S20](sources.md#s20) [S108](sources.md#s108) [S109](sources.md#s109) [S110](sources.md#s110) [S84](sources.md#s84) [S116](sources.md#s116) | Confirmed; placeholders replaced |
 
-**Citation spot-checks**
+<details>
+<summary><b>Citation spot-checks</b> (36 claims re-read against their pages; 5 corrected or clarified)</summary>
 
 | Claim | Page | Result |
 |---|---|---|
@@ -215,6 +216,8 @@ Migration-specific unknowns live in the [unknowns register](2-migration-plan.md#
 | `dagster-embedded-elt` deprecated → `dagster-sling`, `dagster-dlt` | [S72](sources.md#s72) | Confirmed |
 | Fivetran component keys and default "manual" schedule | [S75](sources.md#s75) | Confirmed; YAML sketch fixed to real key placement |
 
+</details>
+
 ## 8. Verification log (2026-11-12): Dagster features in Temporal
 
 | Claim | Pages | Result |
@@ -248,3 +251,14 @@ The effort numbers in [§8 of the plan](2-migration-plan.md#8-effort-and-timelin
 | These results transfer to data-pipeline migrations | — | **I** (inference): no study of this kind of work was found |
 | Aggressive target factors (R ×0.3, G ×0.5, D ×0.7, O ×0.9) | [S158](sources.md#s158) [S159](sources.md#s159) | **I**: chosen at or above the top of the measured range at the team's request (2026-11-13); expected factors kept as the risk band |
 | U19 (worker egress / source allowlists) and U20 (one worker image) are real risks | — | **I**: from our setup, not from docs; added as POC-11a and POC-02 checks |
+
+**Estimate changes** (earlier figures vs the current [plan §8](2-migration-plan.md#8-effort-and-timeline-estimates))
+
+| Figure | Before | Now (aggressive / expected) | Why |
+|---|---|---|---|
+| Wave A (excl. 11a) | ~28 ED | 19.1 / 22.7 ED (baseline 27.5) | Midpoints of ranges; +0.5 ED image check in POC-02 (U20) |
+| POC-11a | 1 ED | 1.2 / 1.4 ED (baseline 1.5) | +0.5 ED network and secrets reach check (U19) |
+| Wave B | ~8 ED | 5.2 / 6.1 ED (baseline 7.5) | POC-10 at the midpoint of 2–3 |
+| P2 Foundation | 3–4 wks | 2.9 / 3.5 wks | Bottom-up list F1–F11 |
+| P4 Waves | ~10 sources / wk | ~4.2 / ~3.4 sources / wk | Bottom-up per-source checklist (plan §7.3); 10 / wk would need about 2–3 people |
+| P5 | 2 wks | ~1.3 ED of work + 30-day wait | The 30-day exit criterion was already in plan §7.1 |

@@ -99,26 +99,34 @@ Ratings use the 0–3 rubric in [§14](#14-method) and are **judgements**. Facts
 
 **Overall** (*judgement*): Dagster leads on data awareness, connectors and ramp-up; Temporal leads on durability, language reach, rate limiting and OSS security.
 
+```mermaid
+flowchart LR
+  T["<b>Temporal leads</b><br/>D3 Durability<br/>D6 Custom / high-volume ingestion<br/>D9 Scale headroom<br/>D10 OSS security<br/>D11 Licensing"]
+  E["<b>Tie</b><br/>D4 Scheduling<br/>D7 Observability<br/>D12 Interoperability"]
+  D["<b>Dagster leads</b><br/>D1 Core abstraction<br/>D2 Operations<br/>D5 Data awareness<br/>D6 Connectors<br/>D8 Testing and DX"]
+  T ~~~ E ~~~ D
+```
+
 ### 1.3 When to pick which (per scenario)
 
-Scenario IDs SC1–SC5 are defined in [§14](#14-method). Scores T/D are the 0–3 rubric (*judgement*).
+Scenarios SC1–SC5 are defined in [§14](#14-method). Scores are the 0–3 rubric for the scenario as a whole (*judgement*).
 
-| Scenario | T | D | Pick | Why (facts) | Watch out for |
-|---|:-:|:-:|---|---|---|
-| SC1 API polling, simple daily pull | 3 | 2 | Dagster | dlt asset with state, concurrency pools [S70](sources.md#s70) [S63](sources.md#s63) | Partitioned dlt assets: concurrency limits recommended [S70](sources.md#s70) |
-| SC1 API polling, millions of calls, strict quota | | | Temporal | Queue-global rate limit, heartbeat checkpoints, sliding window [S24](sources.md#s24) [S20](sources.md#s20) [S21](sources.md#s21) | Unlimited default retries [S7](sources.md#s7); 2 MB payloads [S11](sources.md#s11) |
-| SC2 File arrival in S3 | 2 | 3 | Dagster (slight) | Sensor cursor + run key + dynamic partitions [S61](sources.md#s61) [S101](sources.md#s101) | Sensor 60 s timeout; keep listing cheap [S62](sources.md#s62) |
-| SC2 Very large files, multi-hour loads | | | Temporal | Resume from heartbeat offset [S20](sources.md#s20) | Build your own per-file tracking |
-| SC3 DB incremental batch to warehouse | 2 | 2 | Dagster | Sling/dlt assets, time partitions [S71](sources.md#s71) [S64](sources.md#s64) | Sling has incremental/backfill/change-capture modes, but Dagster pages only show `full-refresh` [S105](sources.md#s105) [S71](sources.md#s71) |
-| SC3 DB copy with custom merge + resumability | | | Temporal | Checkpointed Activities; idempotency keys [S20](sources.md#s20) [S6](sources.md#s6) | Write MERGE logic yourself |
-| SC4 Fivetran/Airbyte orchestration | 1 | 3 | Dagster | First-party components; observe-only mode for Fivetran [S75](sources.md#s75) [S74](sources.md#s74) | Airbyte component triggers syncs; no observe-only mode documented [S103](sources.md#s103) |
-| SC4 ELT from SaaS apps into a warehouse, then dbt | | | Dagster | First-party Fivetran, Airbyte, dlt, Sling and dbt asset integrations with table-level lineage [S68](sources.md#s68) [S77](sources.md#s77) | — |
-| SC5 Daily/hourly partitioned loads with frequent backfills | | | Dagster | Partition-aware backfills: one run per partition, or single-run ranges [S64](sources.md#s64) [S65](sources.md#s65) | — |
-| SC5 Partitioned backfill of a year | 2 | 3 | Dagster | Backfill policies [S65](sources.md#s65) | `single_run` failure retries everything [S65](sources.md#s65) |
-| SC5 Backfill of 1M documents/items | | | Temporal | Child Workflows + sliding window + Continue-As-New; 1M-doc case [S21](sources.md#s21) [S28](sources.md#s28) | History limits 51,200 events / 50 MB [S12](sources.md#s12) |
-| Mixed-language team (Go/Java/TS/.NET) | | | Temporal | 8 SDK languages; Dagster definitions are Python [S1](sources.md#s1) [S66](sources.md#s66) | |
-| Small team, minimal ops, wants data catalog | | | Dagster | Fewer services; catalog and lineage built in [S52](sources.md#s52) [S78](sources.md#s78) | Single daemon, no replicas [S52](sources.md#s52) |
-| Shared platform, many teams, OSS access control | | | Temporal | mTLS, Authorizer, SSO [S45](sources.md#s45); Dagster OSS has no RBAC [S89](sources.md#s89) | Shard count chosen up front [S2](sources.md#s2) |
+| Scenario (score T / D) | Case | Pick | Why (facts) | Watch out for |
+|---|---|---|---|---|
+| **SC1** API polling (3 / 2) | Simple daily pull | Dagster | dlt asset with state, concurrency pools [S70](sources.md#s70) [S63](sources.md#s63) | Partitioned dlt assets: concurrency limits recommended [S70](sources.md#s70) |
+| | Millions of calls, strict quota | Temporal | Queue-global rate limit, heartbeat checkpoints, sliding window [S24](sources.md#s24) [S20](sources.md#s20) [S21](sources.md#s21) | Unlimited default retries [S7](sources.md#s7); 2 MB payloads [S11](sources.md#s11) |
+| **SC2** File arrival in S3 (2 / 3) | Normal files | Dagster (slight) | Sensor cursor + run key + dynamic partitions [S61](sources.md#s61) [S101](sources.md#s101) | Sensor 60 s timeout; keep listing cheap [S62](sources.md#s62) |
+| | Very large files, multi-hour loads | Temporal | Resume from heartbeat offset [S20](sources.md#s20) | Build your own per-file tracking |
+| **SC3** DB incremental (2 / 2) | Batch to warehouse | Dagster | Sling/dlt assets, time partitions [S71](sources.md#s71) [S64](sources.md#s64) | Sling has incremental/backfill/change-capture modes, but Dagster pages only show `full-refresh` [S105](sources.md#s105) [S71](sources.md#s71) |
+| | Custom merge + resumability | Temporal | Checkpointed Activities; idempotency keys [S20](sources.md#s20) [S6](sources.md#s6) | Write MERGE logic yourself |
+| **SC4** SaaS connector sync (1 / 3) | Fivetran/Airbyte orchestration | Dagster | First-party components; observe-only mode for Fivetran [S75](sources.md#s75) [S74](sources.md#s74) | Airbyte component triggers syncs; no observe-only mode documented [S103](sources.md#s103) |
+| | ELT from SaaS apps into a warehouse, then dbt | Dagster | First-party Fivetran, Airbyte, dlt, Sling and dbt asset integrations with table-level lineage [S68](sources.md#s68) [S77](sources.md#s77) | — |
+| **SC5** Large backfill (2 / 3) | Daily/hourly partitions, frequent backfills | Dagster | Partition-aware backfills: one run per partition, or single-run ranges [S64](sources.md#s64) [S65](sources.md#s65) | — |
+| | A year of partitions | Dagster | Backfill policies [S65](sources.md#s65) | `single_run` failure retries everything [S65](sources.md#s65) |
+| | 1M documents/items | Temporal | Child Workflows + sliding window + Continue-As-New; 1M-doc case [S21](sources.md#s21) [S28](sources.md#s28) | History limits 51,200 events / 50 MB [S12](sources.md#s12) |
+| **Team and platform** | Mixed-language team (Go/Java/TS/.NET) | Temporal | 8 SDK languages; Dagster definitions are Python [S1](sources.md#s1) [S66](sources.md#s66) | — |
+| | Small team, minimal ops, wants data catalog | Dagster | Fewer services; catalog and lineage built in [S52](sources.md#s52) [S78](sources.md#s78) | Single daemon, no replicas [S52](sources.md#s52) |
+| | Shared platform, many teams, OSS access control | Temporal | mTLS, Authorizer, SSO [S45](sources.md#s45); Dagster OSS has no RBAC [S89](sources.md#s89) | Shard count chosen up front [S2](sources.md#s2) |
 
 ### 1.4 Decision flowchart (*judgement*)
 
@@ -161,7 +169,7 @@ flowchart TD
 > - **Temporal** is a general **durable-execution engine**: code runs to completion "whether that takes a second or a year", even across crashes [S1](sources.md#s1).
 > - **Dagster** is a **data orchestrator** built around **software-defined assets** [S93](sources.md#s93).
 > - Temporal knows Workflows, Activities and events, not datasets. Dagster knows assets, partitions and lineage, but recovers only at step/asset boundaries.
-> - Neither vendor publishes an official comparison with the other [S102](sources.md#s102).
+> - Neither vendor publishes an official comparison with the other; the only one found is an AI-generated forum answer [S102](sources.md#s102) (*third-party, not authoritative*).
 
 | | Temporal (OSS) | Dagster (OSS) |
 |---|---|---|
@@ -169,7 +177,6 @@ flowchart TD
 | Core unit | Workflow (deterministic orchestration code) + Activity (side effects) [S5](sources.md#s5) | Asset (central abstraction); ops, jobs and graphs as the lower task layer [S57](sources.md#s57) [S56](sources.md#s56) |
 | Positioning vs others | Not stated against Dagster | Against "orchestrators and workflow engines" that "focused exclusively on operational concerns"; "Since Dagster is data-asset aware, it can provide context around those assets that no other system can" [S100](sources.md#s100) (*vendor blog*) |
 | Languages | .NET, Go, Java, PHP, Python, Ruby, Rust, TypeScript [S1](sources.md#s1) | Python for definitions; other languages via Dagster Pipes [S66](sources.md#s66) |
-| Knows about | Workflows, Activities, events; not datasets | Assets, partitions, lineage; recovers only at step/asset boundaries |
 | Data-pipeline content | Mainly guest posts and customer stories, not normative ETL docs [S27](sources.md#s27) [S28](sources.md#s28) | Docs and integrations centred on assets |
 
 ```mermaid
@@ -194,7 +201,6 @@ flowchart LR
 - Temporal **does not run your code** on its servers; your Workers do. The docs call the opposite belief a "common misconception" [S1](sources.md#s1).
 - Temporal has no built-in datasets, assets, lineage, partitions or data quality (*inference*); a guest post says it does not provide row-level auditing [S27](sources.md#s27) (*vendor blog*).
 - No fetched Dagster page claims Temporal-style durable execution (event-sourced replay); recovery is per step or asset using persisted outputs [S59](sources.md#s59).
-- No official comparison exists from either vendor; the only one found is an AI-generated forum answer [S102](sources.md#s102) (*third-party, not authoritative*).
 
 **Verdict** (*judgement*): "**move many things reliably**" (API pages, documents, files with complex retry/state) fits Temporal. "**Keep these tables fresh and know where they came from**" fits Dagster. Many teams have both ([§13](#13-using-both-together)).
 
@@ -1118,7 +1124,7 @@ When a pending-operation limit is hit, the Commands fail [S11](sources.md#s11) a
 > - **Dagster OSS** has no built-in user authentication or RBAC; a maintainer confirms these are Dagster+ only [S89](sources.md#s89).
 > - Community auth add-ons for Dagster OSS exist but are third-party and unevaluated [S91](sources.md#s91) [S92](sources.md#s92).
 
-Both are **insecure by default**. Temporal's default Authorizer "allows **every** API request, with no authentication or access control" [S45](sources.md#s45).
+Temporal's default Authorizer "allows **every** API request, with no authentication or access control" [S45](sources.md#s45).
 
 | Control | Temporal OSS | Dagster OSS |
 |---|---|---|
@@ -1202,7 +1208,7 @@ flowchart LR
 > - **No official Temporal–Dagster integration found**: Dagster's integrations index lists none [S68](sources.md#s68); combining them is custom code.
 > - Three patterns (*inference*): Dagster outer / Temporal inner, Temporal outer / Dagster inner, or joined only by storage.
 
-**No official integration found.** Dagster's integrations index lists no Temporal integration [S68](sources.md#s68), and the searches recorded in [evidence and gaps](3-evidence-and-gaps.md) found no first-party bridge. Building blocks (the pattern itself is *inference*):
+The searches recorded in [evidence and gaps](3-evidence-and-gaps.md) found no first-party bridge either. Building blocks (the pattern itself is *inference*):
 
 - Dagster webserver "responds to GraphQL queries" [S52](sources.md#s52).
 - Dagster Pipes runs external code that "can be triggered from Python" and reports logs and metadata back [S66](sources.md#s66).

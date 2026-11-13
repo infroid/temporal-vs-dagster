@@ -1,24 +1,23 @@
 # Temporal vs Dagster for data ingestion
 
-Two pieces of work, one repo:
-
-1. **Comparison** of open source, self-hosted **Temporal** and **Dagster** for data engineering pipelines, focused on ingestion.
-2. **Migration plan** for moving our ~50 Dagster ingestion jobs (Meltano/dlt → Snowflake → dbt) to a shared company Temporal cluster.
-
-Every fact is cited to an official page; judgements and inferences are labelled.
-
-## Read this
-
-| Doc | What it answers | Read it if |
+| Part | Question it answers | Doc |
 |---|---|---|
-| [docs/1-comparison.md](docs/1-comparison.md) | How Temporal and Dagster differ, with exact limits, per-scenario patterns, a matrix and a decision flowchart | You are choosing an orchestrator |
-| [docs/2-migration-plan.md](docs/2-migration-plan.md) | Current state, feature mapping, what Temporal lacks natively and options to get it (partitions, backfills, lineage, freshness, alerts), unknowns register, POC plan, cutover and rollback runbook, effort and timeline estimates (LLM-assisted) | You are working on the migration |
-| [docs/3-evidence-and-gaps.md](docs/3-evidence-and-gaps.md) | What could not be verified, source conflicts, verification log | You want to check a claim |
-| [docs/sources.md](docs/sources.md) | All 162 numbered sources (`[S#]`) | You follow a citation |
+| 1. Comparison | Open source, self-hosted **Temporal** or **Dagster** for ingestion pipelines? | [docs/1-comparison.md](docs/1-comparison.md) |
+| 2. Migration plan | How do we move ~50 Dagster jobs (Meltano/dlt → Snowflake → dbt) to the shared company Temporal cluster, and how long will it take? | [docs/2-migration-plan.md](docs/2-migration-plan.md) |
+| Evidence | What could not be verified, where sources conflict, what was re-checked | [docs/3-evidence-and-gaps.md](docs/3-evidence-and-gaps.md) |
+| Sources | All 162 numbered sources behind the `[S#]` citations | [docs/sources.md](docs/sources.md) |
 
-## TL;DR
+```mermaid
+flowchart LR
+  C["1. Comparison<br/>which tool, and why"] --> M["2. Migration plan<br/>how, risks, POCs, effort"]
+  C -. claims .-> E["3. Evidence and gaps"]
+  M -. claims .-> E
+  E --> S["Sources S1–S162"]
+```
 
-**Comparison** (details and citations in [§1 of the comparison](docs/1-comparison.md#1-summary))
+## Comparison in one table
+
+Details and citations: [comparison §1](docs/1-comparison.md#1-summary).
 
 | | Temporal OSS | Dagster OSS |
 |---|---|---|
@@ -28,27 +27,29 @@ Every fact is cited to an official page; judgements and inferences are labelled.
 | Watch out | 2 MB payloads, 51,200-event histories; determinism and versioning | Single daemon; recovery only at step/run level; Prefect acquisition |
 | Pick it for (*judgement*) | Custom, API-heavy, long-running ingestion | Batch ELT into a warehouse feeding dbt |
 
-**Migration** (details in [the plan](docs/2-migration-plan.md))
+## Migration in one table
+
+Details: [migration plan](docs/2-migration-plan.md). One person does the migration; all numbers are **estimates** (aggressive target, LLM-assisted).
 
 ```mermaid
 flowchart LR
-  S0["Step 0<br/>Namespace PR"] --> WA["Wave A POCs<br/>go / no-go"]
+  S0["Step 0<br/>Namespace PR"] --> WA["Wave A POCs<br/>go / no-go wk ~5.6"]
   WA --> WB["Wave B POCs"]
-  WB --> F["Foundation"]
-  F --> P["Pilot<br/>1 cluster"]
-  P --> W["Waves"]
-  W --> D["Decommission<br/>Dagster"]
+  WB --> F["Foundation<br/>~3 wks"]
+  F --> P["Pilot<br/>1 cluster, 2 wks"]
+  P --> W["Waves<br/>~4.2 sources / wk"]
+  W --> D["Last cutover wk ~23<br/>Dagster off wk ~27"]
 ```
 
 | | |
 |---|---|
-| Status | Plan ready; all team questions answered (2026-11-12) |
-| Next step | Platform PR to register our non-prod Namespace |
-| Top risk | Partitions and backfills: > 75 % of jobs, down to 5-minute, ~2-year backfills (POC-07) |
-| Dagster features not in Temporal | Partitions, partition status, lineage, asset catalog, freshness, alerts (re-verified 2026-11-12). Each has a recommended replacement: partition library + Snowflake status table + `BackfillWorkflow`, dbt docs + Snowflake lineage, `dbt source freshness`, failure Activity + Grafana alerts ([§4.1–4.2](docs/2-migration-plan.md#41-native-support-check-re-verified-2026-11-12)) |
-| Other High risks | Per-job isolation, shared API token limits, duplicates and state under retries, dbt overlap, shared-cluster readiness |
-| Cutover unit | Dependency cluster (all sources feeding the same dbt models move together), each reversible; a too-big cluster can be split using a shared dbt job and exclusions ([§7.2](docs/2-migration-plan.md#72-cutover-unit-dependency-cluster)) |
-| Effort (estimate) | **Aggressive target with LLM help, one person:** ~115 engineer-days; POC go / no-go ≈ week 5.6; last cutover ≈ week 23; Dagster off ≈ week 27. Risk band ≈ 27–32 weeks to last cutover. POC plan at a glance in [§6.0](docs/2-migration-plan.md#60-poc-phase-at-a-glance); estimates in [§8](docs/2-migration-plan.md#8-effort-and-timeline-estimates) |
+| Status (2026-11-13) | Plan ready; all team questions answered. **Next:** platform PR for our non-prod Namespace |
+| Top risk | Partitions and backfills: > 75 % of jobs, down to 5-minute, ~2-year backfills ([POC-07](docs/2-migration-plan.md#poc-07--partitions-and-backfills-u11-u18)) |
+| Other High risks | Per-job isolation, shared API token limits, duplicates and state under retries, dbt overlap, shared-cluster readiness, worker network reach |
+| Missing in Temporal | Partitions, partition status, lineage, asset catalog, freshness, alerts (re-verified 2026-11-12) |
+| Picks for the gaps | Partition library + Snowflake status table + `BackfillWorkflow`; dbt docs + Snowflake lineage; `dbt source freshness`; failure Activity + Grafana alerts ([plan §4.2](docs/2-migration-plan.md#42-options-to-get-each-missing-feature)) |
+| Cutover unit | Dependency cluster: all sources feeding the same dbt models move together; each cutover is reversible; a too-big cluster is split with a shared dbt job and exclusions ([plan §7.2](docs/2-migration-plan.md#72-cutover-unit-dependency-cluster)) |
+| Effort | ~115 engineer-days; risk band 27–32 weeks to last cutover ([POC view](docs/2-migration-plan.md#61-poc-phase-at-a-glance), [estimates](docs/2-migration-plan.md#8-effort-and-timeline-estimates)) |
 
 ## Conventions
 
@@ -59,4 +60,9 @@ flowchart LR
 | *Judgement* | Author's opinion (ratings, recommendations, risk levels) |
 | **Not verified** | Missing from sources; listed in [docs/3-evidence-and-gaps.md](docs/3-evidence-and-gaps.md) |
 
-Versions: Temporal Server v1.32.1, Dagster 1.13.29 (comparison, 2026-11-11); shared cluster runs Temporal Server 1.32.2 (migration). This repo is public: internal repo, team and tenant names are kept out.
+| Versions | |
+|---|---|
+| Comparison (2026-11-11) | Temporal Server v1.32.1, Dagster 1.13.29 |
+| Shared cluster (migration) | Temporal Server 1.32.2 |
+
+This repo is public: internal repo, team and tenant names are kept out.
