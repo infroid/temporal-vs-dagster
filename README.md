@@ -48,7 +48,7 @@ flowchart LR
 | Dagster features not in Temporal | Partitions, partition status, lineage, asset catalog, freshness, alerts (re-verified 2026-11-12). Each has a recommended replacement: partition library + Snowflake status table + `BackfillWorkflow`, dbt docs + Snowflake lineage, `dbt source freshness`, failure Activity + Grafana alerts ([§4.1–4.2](docs/2-migration-plan.md#41-native-support-check-re-verified-2026-11-12)) |
 | Other High risks | Per-job isolation, shared API token limits, duplicates and state under retries, dbt overlap, shared-cluster readiness |
 | Cutover unit | Dependency cluster (all sources feeding the same dbt models move together), each reversible; a too-big cluster can be split using a shared dbt job and exclusions ([§7.2](docs/2-migration-plan.md#72-cutover-unit-dependency-cluster)) |
-| Effort (estimate) | ~136 engineer-days with LLM-assisted coding (~170 without, ~163 with 20 % contingency); ≈ 32 weeks for 1 engineer, ≈ 21 weeks for 2. Half the effort is porting and verifying 47 sources ([§8](docs/2-migration-plan.md#8-effort-and-timeline-estimates)) |
+| Effort (estimate) | ~136 engineer-days with LLM-assisted coding (~170 without, ~163 with 20 % contingency); ≈ 32 weeks for one person working alone (≈ 38 at 80 % focus). Half the effort is porting and verifying 47 sources ([§8](docs/2-migration-plan.md#8-effort-and-timeline-estimates)) |
 
 ## Conventions
 
